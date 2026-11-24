@@ -683,11 +683,19 @@ public sealed class OpcPackage : IAsyncDisposable
         await using (XmlWriter writer = XmlWriter.Create(buffer, settings))
         {
             await writer.WriteStartDocumentAsync(true);
+            bool wroteRoot = false;
 
             while (OpcXml.IsEnd(reader, depth) == false && reader.EOF == false)
             {
                 if (reader.NodeType == XmlNodeType.Element)
                 {
+                    // A part is one XML document, and a document has one root element.
+                    if (wroteRoot == true)
+                    {
+                        throw new XmlException("pkg:xmlData has more than one root element.");
+                    }
+
+                    wroteRoot = true;
                     await writer.WriteNodeAsync(reader, true);
 
                     continue;

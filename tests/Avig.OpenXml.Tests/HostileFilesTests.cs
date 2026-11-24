@@ -138,6 +138,41 @@ public class HostileFilesTests
     }
 
     [Fact]
+    public async Task A_flat_part_with_two_root_elements_is_damaged()
+    {
+        string flat = """
+            <pkg:package xmlns:pkg="http://schemas.microsoft.com/office/2006/xmlPackage">
+              <pkg:part pkg:name="/a.xml" pkg:contentType="application/xml"><pkg:xmlData><a/><b/></pkg:xmlData></pkg:part>
+            </pkg:package>
+            """;
+
+        Result<OpcPackage> opened = await OpcPackage.OpenAsync(new MemoryStream(Encoding.UTF8.GetBytes(flat)));
+
+        Assert.True(opened.IsFailure(out string? error, out _));
+        Assert.StartsWith(OpcErrors.DamagedPrefix, error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Xml_deeper_than_the_default_limit_saves_as_flat_opc_when_the_writer_allows_it()
+    {
+        string deep = string.Concat(Enumerable.Repeat("<a>", 150)) + string.Concat(Enumerable.Repeat("</a>", 150));
+        using MemoryStream output = new();
+
+        await using (OpcPackageWriter writer = await OpcPackageWriter.CreateAsync(output, OpcPackageKind.FlatOpc, leaveOpen: true))
+        {
+            writer.MaxXmlDepth = 256;
+            await writer.WritePartAsync("deep.xml", "application/xml", Encoding.UTF8.GetBytes(deep));
+            await writer.CompleteAsync();
+        }
+
+        output.Position = 0;
+        Result<OpcPackage> opened = await OpcPackage.OpenAsync(output, new OpcOpenOptions { MaxXmlDepth = 256 });
+
+        Assert.True(opened.IsSuccess(out OpcPackage? package));
+        await package.DisposeAsync();
+    }
+
+    [Fact]
     public async Task A_dtd_is_refused()
     {
         string flat = """

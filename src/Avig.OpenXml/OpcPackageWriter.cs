@@ -50,6 +50,13 @@ public sealed class OpcPackageWriter : IAsyncDisposable
     /// </summary>
     public string? FlatOpcProgId { get; set; }
 
+    /// <summary>
+    /// How deep the XML of a part may be nested when it is copied into a Flat OPC file. Set it to
+    /// the <see cref="OpcOpenOptions.MaxXmlDepth"/> the parts were read with, so that everything
+    /// that could be opened can also be saved. <see cref="OpcXml.DefaultMaxDepth"/> by default.
+    /// </summary>
+    public int MaxXmlDepth { get; set; } = OpcXml.DefaultMaxDepth;
+
     /// <summary>Starts a package on a stream.</summary>
     /// <param name="output">Where the file goes.</param>
     /// <param name="kind">A zip file (the default) or Flat OPC.</param>
@@ -492,7 +499,7 @@ public sealed class OpcPackageWriter : IAsyncDisposable
                 await writer.WriteStartElementAsync(FlatPrefix, "xmlData", OpcNamespaces.FlatOpc);
 
                 using (MemoryStream part = new(bytes, false))
-                using (XmlReader reader = OpcXml.CreateReader(part))
+                using (XmlReader reader = OpcXml.CreateReader(part, MaxXmlDepth))
                 {
                     await reader.MoveToContentAsync();
                     await writer.WriteNodeAsync(reader, true);
