@@ -169,6 +169,37 @@ public class PackageTests
         }
     }
 
+    [Theory]
+    [InlineData(OpcPackageKind.Zip)]
+    [InlineData(OpcPackageKind.FlatOpc)]
+    public async Task A_part_written_bit_by_bit_is_done_when_its_stream_is_disposed(OpcPackageKind kind)
+    {
+        using MemoryStream file = new();
+
+        await using (OpcPackageWriter writer = await OpcPackageWriter.CreateAsync(file, kind, leaveOpen: true))
+        {
+            await using (Stream part = await writer.BeginPartAsync("a.xml", "application/xml"))
+            {
+                await part.WriteAsync("<a>"u8.ToArray());
+                await Assert.ThrowsAsync<InvalidOperationException>(() => writer.BeginPartAsync("b.xml", "application/xml"));
+                await part.WriteAsync("</a>"u8.ToArray());
+            }
+
+            await writer.WritePartAsync("b.xml", "application/xml", "<b/>"u8.ToArray());
+            await writer.CompleteAsync();
+        }
+
+        Result<OpcPackage> opened = await OpcPackage.OpenAsync(new MemoryStream(file.ToArray()));
+        Assert.True(opened.IsSuccess(out OpcPackage? package));
+
+        await using (package)
+        {
+            Assert.True((await package.ReadPartAsync("a.xml")).IsSuccess(out byte[]? data));
+            Assert.Contains("<a", Encoding.UTF8.GetString(data), StringComparison.Ordinal);
+            Assert.True(package.Contains("b.xml"));
+        }
+    }
+
     internal static async Task<byte[]> WriteSampleAsync(OpcPackageKind kind)
     {
         using MemoryStream file = new();

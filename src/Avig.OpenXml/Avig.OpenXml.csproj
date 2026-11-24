@@ -22,7 +22,7 @@
     <!-- 0.x until Avig.Kalkyl 1.0.0, which is released the same day as 1.0.0 of this package. -->
     <IsPackable>true</IsPackable>
     <PackageId>Avig.OpenXml</PackageId>
-    <Version>0.1.1</Version>
+    <Version>0.1.2</Version>
     <Title>Avig.OpenXml</Title>
     <Description>The package layer under Avig.Kalkyl and Avig.Ord: reads and writes Open Packaging Conventions files (.xlsx, .docx and others), as zip or as Flat OPC, with limits that keep a hostile file from running the process out of memory. Not related to Microsoft's DocumentFormat.OpenXml. No dependencies besides Avig.Result; trimming and Native AOT safe.</Description>
     <PackageTags>openxml;opc;ooxml;zip;xlsx;docx;flat-opc</PackageTags>

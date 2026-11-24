@@ -31,6 +31,7 @@ public sealed class OpcPackageWriter : IAsyncDisposable
     private readonly HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<OpcRelationship>> relationships = new(StringComparer.OrdinalIgnoreCase);
     private bool completed;
+    private bool openPart;
 
     private OpcPackageWriter(OpcPackageKind kind, Stream output, bool leaveOpen, ZipArchive? archive)
     {
@@ -87,26 +88,49 @@ public sealed class OpcPackageWriter : IAsyncDisposable
     public async Task WritePartAsync(string name, string contentType, Func<Stream, Task> write, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(write);
+
+        await using Stream stream = await BeginPartAsync(name, contentType, cancellationToken);
+        await write(stream);
+    }
+
+    /// <summary>
+    /// Starts a part and gives back the stream to write it to; the part is done when the stream
+    /// is disposed. For a part written bit by bit over many calls, as a streaming writer does.
+    /// Only one part can be open at a time: dispose its stream before the next is begun.
+    /// </summary>
+    /// <param name="name">The part name, such as word/document.xml.</param>
+    /// <param name="contentType">Its content type, for [Content_Types].xml.</param>
+    /// <param name="cancellationToken">Cancels the operation.</param>
+    /// <returns>The stream to write the part's bytes to.</returns>
+    /// <exception cref="InvalidOperationException">The package is completed, a part is open, or the part is already written.</exception>
+    public async Task<Stream> BeginPartAsync(string name, string contentType, CancellationToken cancellationToken = default)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(contentType);
+
+        if (openPart == true)
+        {
+            throw new InvalidOperationException("A part is still open. Dispose its stream before the next part is begun.");
+        }
+
         string part = Claim(name);
+        openPart = true;
 
         if (archive is not null)
         {
             ZipArchiveEntry entry = archive.CreateEntry(part, CompressionLevel.Optimal);
-
-            await using (Stream stream = await entry.OpenAsync(cancellationToken))
-            {
-                await write(stream);
-            }
-
+            Stream stream = await entry.OpenAsync(cancellationToken);
             written.Add((part, contentType, null));
 
-            return;
+            return new PartStream(stream, () => openPart = false);
         }
 
-        using MemoryStream buffer = new();
-        await write(buffer);
-        written.Add((part, contentType, buffer.ToArray()));
+        MemoryStream buffer = new();
+
+        return new PartStream(buffer, () =>
+        {
+            written.Add((part, contentType, buffer.ToArray()));
+            openPart = false;
+        });
     }
 
     /// <summary>Writes a part from bytes held in memory.</summary>
