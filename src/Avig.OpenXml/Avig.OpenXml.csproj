@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- The packages built on this one must work in a Native AOT app. -->
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- 0.x until Avig.Kalkyl 1.0.0, which is released the same day as 1.0.0 of this package. -->
+    <IsPackable>true</IsPackable>
+    <PackageId>Avig.OpenXml</PackageId>
+    <Version>0.1.1</Version>
+    <Title>Avig.OpenXml</Title>
+    <Description>The package layer under Avig.Kalkyl and Avig.Ord: reads and writes Open Packaging Conventions files (.xlsx, .docx and others), as zip or as Flat OPC, with limits that keep a hostile file from running the process out of memory. Not related to Microsoft's DocumentFormat.OpenXml. No dependencies besides Avig.Result; trimming and Native AOT safe.</Description>
+    <PackageTags>openxml;opc;ooxml;zip;xlsx;docx;flat-opc</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avig.Result" Version="1.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Avig.OpenXml.Tests" />
+  </ItemGroup>
+
+</Project>
