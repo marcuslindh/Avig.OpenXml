@@ -105,6 +105,24 @@ public static class OpcZip
     }
 
     /// <summary>
+    /// Invalid for a zip file that does not say one thing only. A zip file names its entries
+    /// twice, in a local header before each entry's data and in the central directory at the end,
+    /// and programs differ in which they believe; a file where the two disagree (name,
+    /// compression, encryption), where entries overlap, or with bytes before, between or after
+    /// the entries can show a scanner one document and Office another. The stream must be able
+    /// to seek; it is read from its current position, which it is left at.
+    /// </summary>
+    /// <param name="zip">The zip file.</param>
+    /// <param name="maxEntries">More entries than this are not checked; the caller refuses them with its own limit.</param>
+    /// <param name="cancellationToken">Cancels the check.</param>
+    public static Task<Result> CheckStructureAsync(Stream zip, int maxEntries, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(zip);
+
+        return ZipStructure.CheckAsync(zip, maxEntries, cancellationToken);
+    }
+
+    /// <summary>
     /// Opens a part of a file being read, held to the size its zip header gives (see
     /// <see cref="LimitedStream"/>).
     /// </summary>

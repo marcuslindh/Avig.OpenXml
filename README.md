@@ -12,9 +12,13 @@ file from outside cannot run your process out of memory while you read them.
 - No dependencies besides Avig.Result; trimming and Native AOT safe.
 - Failures you should expect come back as `Result`, not exceptions.
 - Every XML part is read without DTD processing and with a limit on how deep elements nest.
+- The zip file must say one thing only: every local header as the central directory has it, and
+  no bytes before, between or after the entries, so that a scanner and Office cannot be shown two
+  different documents (`OpcOpenOptions.StrictZip`, on by default).
 - The zip directory is checked before anything is read: the total unpacked size, the number of
-  parts, duplicate names, names that point outside the package, and entries that cannot be
-  unpacked. Each part is then held to the size its zip header gave.
+  parts, duplicate names (case and Unicode forms folded), names no package may have (`..`, `:`,
+  device names such as `CON`, percent-encoded separators), and entries that are encrypted or
+  cannot be unpacked. Each part is then held to the size its zip header gave.
 
 ## Reading a package
 
@@ -49,6 +53,23 @@ OpcOpenOptions options = new() { FormatName = "a .docx document", LimitsName = "
 
 Every message about a damaged file starts with `OpcErrors.DamagedPrefix`, and every message about
 a limit contains `OpcErrors.LimitMarker`, so the caller can tell the kinds apart.
+
+## What a file points to outside itself
+
+`GetExternalRelationshipsAsync` lists every relationship with `TargetMode="External"`, with the
+part it belongs to. Office follows all but hyperlinks on its own when it opens a file: an attached
+template on a server, a linked picture or OLE object, a frame, an external workbook. This package
+never follows any.
+
+```csharp
+foreach (OpcExternalRelationship link in await package.GetExternalRelationshipsAsync())
+{
+    if (link.IsHyperlink == false)
+    {
+        Console.WriteLine($"{link.SourcePart}: {link.Kind} -> {link.Target}");
+    }
+}
+```
 
 ## Writing a package
 

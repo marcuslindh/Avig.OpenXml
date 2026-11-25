@@ -44,4 +44,13 @@ public static class OpcNamespaces
 
     /// <summary>The content type of a VBA project, which only macro-enabled files have.</summary>
     public const string VbaProjectContentType = "application/vnd.ms-office.vbaProject";
+
+    /// <summary>The content type of an ActiveX control's properties (activeX1.xml), in Word, Excel and PowerPoint.</summary>
+    public const string ActiveXContentType = "application/vnd.ms-office.activeX+xml";
+
+    /// <summary>The content type of an ActiveX control's binary state (activeX1.bin).</summary>
+    public const string ActiveXBinaryContentType = "application/vnd.ms-office.activeX";
+
+    /// <summary>The content type of an embedded OLE object (oleObject1.bin), which can hold a program or a package of files.</summary>
+    public const string OleObjectContentType = "application/vnd.openxmlformats-officedocument.oleObject";
 }

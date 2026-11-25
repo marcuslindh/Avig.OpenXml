@@ -299,6 +299,34 @@ public sealed class OpcPackage : IAsyncDisposable
     }
 
     /// <summary>
+    /// Every relationship in the package that points out of it, from every .rels part, in part
+    /// order. Office follows all but the hyperlinks on its own when it opens the file (see
+    /// <see cref="OpcExternalRelationship"/>); this package never follows any.
+    /// </summary>
+    public async Task<IReadOnlyList<OpcExternalRelationship>> GetExternalRelationshipsAsync(CancellationToken cancellationToken = default)
+    {
+        List<OpcExternalRelationship> found = [];
+
+        foreach (string relationshipsPart in PartNames)
+        {
+            if (OpcPath.TryGetSourcePart(relationshipsPart, out string? source) == false)
+            {
+                continue;
+            }
+
+            foreach (OpcRelationship relationship in await GetRelationshipsAsync(source, cancellationToken))
+            {
+                if (relationship.IsExternal == true)
+                {
+                    found.Add(new OpcExternalRelationship(source, relationship));
+                }
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>
     /// The part the first relationship of a type points to from <paramref name="sourcePart"/>,
     /// resolved to a part name; NotFound when there is none (external ones do not count).
     /// </summary>
@@ -410,6 +438,16 @@ public sealed class OpcPackage : IAsyncDisposable
 
     private static async Task<Result<OpcPackage>> OpenZipAsync(Stream source, OpcOpenOptions options, bool leaveOpen, CancellationToken cancellationToken)
     {
+        if (options.StrictZip == true)
+        {
+            Result structure = await OpcZip.CheckStructureAsync(source, options.MaxParts, cancellationToken);
+
+            if (structure.IsFailure(out string? structureError, out ResultStatus structureStatus) == true)
+            {
+                return Result<OpcPackage>.Failure(structureError, structureStatus);
+            }
+        }
+
         ZipArchive archive;
 
         try

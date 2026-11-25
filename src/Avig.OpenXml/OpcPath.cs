@@ -38,6 +38,35 @@ public static class OpcPath
     }
 
     /// <summary>
+    /// The part whose relationships a .rels part holds, the reverse of <see cref="RelationshipsPath"/>:
+    /// word/document.xml for word/_rels/document.xml.rels, the empty name for _rels/.rels. False
+    /// for a name that is not a .rels part in a _rels folder.
+    /// </summary>
+    public static bool TryGetSourcePart(string relationshipsPath, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? sourcePart)
+    {
+        sourcePart = null;
+        string name = relationshipsPath.Replace('\\', '/').TrimStart('/');
+
+        if (name.EndsWith(".rels", StringComparison.OrdinalIgnoreCase) == false)
+        {
+            return false;
+        }
+
+        int slash = name.LastIndexOf('/');
+
+        if (slash < 0 || string.Equals(Path.GetFileName(name[..slash]), "_rels", StringComparison.OrdinalIgnoreCase) == false)
+        {
+            return false;
+        }
+
+        string folder = name[..(slash - "_rels".Length)];
+        string file = name[(slash + 1)..^".rels".Length];
+        sourcePart = folder + file;
+
+        return true;
+    }
+
+    /// <summary>
     /// Resolves a relationship target against the part that points to it. A target starting
     /// with / is from the package root; otherwise relative to the part's folder, with .. allowed
     /// (but never above the root).
