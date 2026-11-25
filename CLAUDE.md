@@ -30,6 +30,11 @@ dotnet test Avig.OpenXml.slnx
 - **XML utan DTD och med djupgräns**: allt går via `OpcXml.CreateReader`.
 - **Varje del som läses går via `OpcZip.OpenEntryAsync`** (eller `OpcPackage.OpenPartAsync`), så
   att den hålls till storleken i sitt zip-huvud.
+- **Zip-filen ska säga en sak** (`ZipStructure`, `OpcOpenOptions.StrictZip`): lokala huvuden som
+  katalogen, inga byte före, mellan eller efter posterna. Namn som inget paket får ha avgörs av
+  `OpcPath.IsSafe`, för både zip och Flat OPC, och dubbletter jämförs med `OpcPath.ComparisonKey`.
+  Skärp aldrig reglerna utan att köra dem över riktiga filer (Kalkyls kompatibilitetsfiler,
+  Ords WordFiles och gärna filer på disken) så att inget som Office skrivit avvisas.
 - **Fientliga filer blir tester** i `HostileFilesTests.cs`.
 - Version 1.0.0 släpps samma dag som Avig.Kalkyl 1.0.0. Till dess 0.x i `G:\LocalNugetRepo`.
 
