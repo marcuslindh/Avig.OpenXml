@@ -61,6 +61,15 @@ public static class ChartReader
         }
 
         List<string> mainAxes = Children(main.Element, "axId").Select(element => element.Attribute("val")?.Value ?? string.Empty).ToList();
+
+        // A stock chart with the volume as columns is a stock chart, though the columns come first.
+        ChartType chartType = main.Type;
+
+        if (plots.Exists(plot => plot.Type == ChartType.Stock) == true)
+        {
+            chartType = ChartType.Stock;
+        }
+
         List<(int Index, ChartSpaceSeries Series)> series = [];
 
         foreach ((ChartType type, XElement plot) in plots)
@@ -75,18 +84,18 @@ public static class ChartReader
                     break;
                 }
 
-                ChartSpaceSeries read = ReadSeries(element, type, main.Type) with { SecondaryAxis = secondary };
+                ChartSpaceSeries read = ReadSeries(element, type, chartType) with { SecondaryAxis = secondary };
 
                 series.Add((Int(Value(element, "idx"), series.Count), read));
             }
         }
 
-        ChartSpace space = new(main.Type)
+        ChartSpace space = new(chartType)
         {
             Title = TitleText(Child(chart, "title")),
             TitleFont = TitleFont(Child(chart, "title")),
             Series = series.OrderBy(item => item.Index).Select(item => item.Series).ToList(),
-            Stacked = Value(main.Element, "grouping") is "stacked" or "percentStacked",
+            Grouping = GroupingOf(main.Element, axes),
             VaryColors = Flag(main.Element, "varyColors"),
             RoundedCorners = Flag(chartSpace, "roundedCorners") ?? true,
             HoleSize = Clamped(Value(main.Element, "holeSize"), 10, 90),
@@ -95,6 +104,7 @@ public static class ChartReader
             Overlap = Clamped(Value(main.Element, "overlap"), -100, 100),
         };
 
+        space = ReadKinds(space, chartSpace, chart, main, plots, axes);
         space = ReadLegend(space, Child(chart, "legend"));
         space = ReadAxes(space, main, mainAxes, axes, plots);
         XElement? chartProperties = Child(chartSpace, "spPr");
@@ -123,7 +133,7 @@ public static class ChartReader
 
         switch (plot.Name.LocalName)
         {
-            case "barChart":
+            case "barChart" or "bar3DChart":
                 type = ChartType.Column;
 
                 if (Value(plot, "barDir") == "bar")
@@ -133,17 +143,17 @@ public static class ChartReader
 
                 return true;
 
-            case "lineChart":
+            case "lineChart" or "line3DChart":
                 type = ChartType.Line;
 
                 return true;
 
-            case "areaChart":
+            case "areaChart" or "area3DChart":
                 type = ChartType.Area;
 
                 return true;
 
-            case "pieChart":
+            case "pieChart" or "pie3DChart":
                 type = ChartType.Pie;
 
                 return true;
@@ -158,9 +168,331 @@ public static class ChartReader
 
                 return true;
 
+            case "ofPieChart":
+                type = ChartType.PieOfPie;
+
+                if (Value(plot, "ofPieType") == "bar")
+                {
+                    type = ChartType.BarOfPie;
+                }
+
+                return true;
+
+            case "radarChart":
+                type = ChartType.Radar;
+
+                return true;
+
+            case "bubbleChart":
+                type = ChartType.Bubble;
+
+                return true;
+
+            case "stockChart":
+                type = ChartType.Stock;
+
+                return true;
+
+            case "surfaceChart" or "surface3DChart":
+                type = ChartType.Surface;
+
+                return true;
+
             default:
                 return false;
         }
+    }
+
+    /// <summary>The grouping of a plot: stacked, stacked to 100 %, or (in a 3-D column, bar or area plot with a depth axis) in depth.</summary>
+    private static ChartGrouping GroupingOf(XElement plot, Dictionary<string, XElement> axes)
+    {
+        switch (Value(plot, "grouping"))
+        {
+            case "stacked":
+                return ChartGrouping.Stacked;
+
+            case "percentStacked":
+                return ChartGrouping.PercentStacked;
+
+            case "standard" when plot.Name.LocalName == "line3DChart":
+                return ChartGrouping.Depth;
+
+            case "standard" when plot.Name.LocalName is "bar3DChart" or "area3DChart":
+                List<string> ids = Children(plot, "axId").Select(element => element.Attribute("val")?.Value ?? string.Empty).ToList();
+
+                if (ids.Count >= 3 && axes.TryGetValue(ids[2], out XElement? depth) == true && depth.Name.LocalName == "serAx")
+                {
+                    return ChartGrouping.Depth;
+                }
+
+                return ChartGrouping.Default;
+
+            default:
+                return ChartGrouping.Default;
+        }
+    }
+
+    /// <summary>What the other chart types add: 3-D, shapes, radar, surface, bubble, pie-of-pie, stock lines, the depth axis, the data table, the style and the workbook.</summary>
+    private static ChartSpace ReadKinds(ChartSpace space, XElement chartSpace, XElement? chart, (ChartType Type, XElement Element) main, List<(ChartType Type, XElement Element)> plots, Dictionary<string, XElement> axes)
+    {
+        XElement plot = main.Element;
+
+        if (plot.Name.LocalName.EndsWith("3DChart", StringComparison.Ordinal) == true)
+        {
+            space = space with { ThreeD = ReadView3D(Child(chart, "view3D")) };
+        }
+
+        if (plot.Name.LocalName == "bar3DChart")
+        {
+            space = space with { BarShape = BarShapeOf(Value(plot, "shape")) };
+        }
+
+        space = space with
+        {
+            RadarStyle = RadarStyleOf(Value(plot, "radarStyle")),
+            Wireframe = Flag(plot, "wireframe") ?? false,
+            ShowNegativeBubbles = Flag(plot, "showNegBubbles") ?? false,
+            BubbleScale = Clamped(Value(plot, "bubbleScale"), 0, 300),
+            Bubble3D = Flag(plot, "bubble3D") ?? Children(plot, "ser").Any(item => Flag(item, "bubble3D") == true),
+            SecondPlotSize = Clamped(Value(plot, "secondPieSize"), 5, 200),
+            Split = SplitOf(Value(plot, "splitType")),
+        };
+
+        if (Number(Value(plot, "splitPos")) is double split && split >= 0)
+        {
+            space = space with { SplitValue = split };
+        }
+
+        // The stock lines are read so that the defaults (a stock plot's high-low lines, its
+        // up-down bars with four series, a pie-of-pie's series lines) stay null.
+        foreach ((ChartType type, XElement element) in plots)
+        {
+            bool stock = type == ChartType.Stock;
+
+            if (type is ChartType.Line or ChartType.Stock)
+            {
+                bool highLow = Child(element, "hiLowLines") is not null;
+                bool upDown = Child(element, "upDownBars") is not null;
+
+                if (highLow != stock)
+                {
+                    space = space with { HighLowLines = highLow };
+                }
+
+                if (upDown != (stock == true && Children(element, "ser").Count() == 4))
+                {
+                    space = space with { UpDownBars = upDown };
+                }
+            }
+
+            if (Child(element, "dropLines") is not null)
+            {
+                space = space with { DropLines = true };
+            }
+
+            if (type is ChartType.PieOfPie or ChartType.BarOfPie && Child(element, "serLines") is null)
+            {
+                space = space with { SeriesLines = false };
+            }
+
+            if (type is ChartType.Column or ChartType.Bar && Child(element, "serLines") is not null)
+            {
+                space = space with { SeriesLines = true };
+            }
+
+            if (type == ChartType.Scatter && Children(element, "ser").Any(AutomaticLine) == true)
+            {
+                space = space with { ScatterLines = true };
+            }
+        }
+
+        XElement? plotArea = Child(chart, "plotArea");
+
+        if (Child(plotArea, "serAx") is XElement seriesAxis)
+        {
+            space = space with { SeriesAxis = ReadAxis(seriesAxis) };
+        }
+
+        if (Child(plotArea, "dTable") is XElement table)
+        {
+            space = space with
+            {
+                DataTable = new ChartDataTable
+                {
+                    HorizontalBorders = Flag(table, "showHorzBorder") ?? false,
+                    VerticalBorders = Flag(table, "showVertBorder") ?? false,
+                    Outline = Flag(table, "showOutline") ?? false,
+                    ShowLegendKeys = Flag(table, "showKeys") ?? false,
+                },
+            };
+        }
+
+        if (StyleOf(chartSpace) is int style)
+        {
+            space = space with { Style = style };
+        }
+
+        XAttribute? data = Child(chartSpace, "externalData")?.Attributes().FirstOrDefault(attribute => attribute.Name.LocalName == "id");
+
+        if (data is not null && data.Value.Length > 0 && data.Value.Length <= 255)
+        {
+            space = space with { ExternalData = Clean(data.Value) };
+        }
+
+        return space;
+    }
+
+    /// <summary>A scatter series with a line in the application's colour: an a:ln that neither hides the line nor gives it a colour this layer reads.</summary>
+    private static bool AutomaticLine(XElement series)
+    {
+        XElement? properties = Child(series, "spPr");
+        XElement? line = Child(properties, "ln");
+
+        return line is not null && Child(line, "noFill") is null && DrawingReader.TryReadOutline(properties!, out _) == false;
+    }
+
+    /// <summary>The chart's built-in style: c:style, or c14:style (100 more) where the mc:AlternateContent was resolved to it.</summary>
+    private static int? StyleOf(XElement chartSpace)
+    {
+        XElement? style = chartSpace.Elements().FirstOrDefault(element => element.Name.LocalName == "style");
+
+        if (style is null)
+        {
+            XElement? fallback = Child(Child(chartSpace, "AlternateContent"), "Fallback");
+            style = Child(fallback, "style");
+        }
+
+        int? read = null;
+
+        if (style is not null && int.TryParse(style.Attribute("val")?.Value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int value) == true)
+        {
+            if (value > 100)
+            {
+                value -= 100;
+            }
+
+            if (value >= 1 && value <= 48)
+            {
+                read = value;
+            }
+        }
+
+        return read;
+    }
+
+    private static ChartView3D ReadView3D(XElement? view)
+    {
+        ChartView3D read = new()
+        {
+            RotationX = Clamped(Value(view, "rotX"), -90, 90) ?? 15,
+            RotationY = Clamped(Value(view, "rotY"), 0, 360) ?? 20,
+            DepthPercent = Clamped(Value(view, "depthPercent"), 20, 2000) ?? 100,
+            RightAngleAxes = Flag(view, "rAngAx") ?? true,
+            Perspective = Clamped(Value(view, "perspective"), 0, 240) ?? 30,
+        };
+
+        return read;
+    }
+
+    private static BarShape BarShapeOf(string? name)
+    {
+        return name switch
+        {
+            "cylinder" => BarShape.Cylinder,
+            "cone" => BarShape.Cone,
+            "coneToMax" => BarShape.ConeToMax,
+            "pyramid" => BarShape.Pyramid,
+            "pyramidToMax" => BarShape.PyramidToMax,
+            _ => BarShape.Box,
+        };
+    }
+
+    private static RadarStyle RadarStyleOf(string? name)
+    {
+        if (name == "filled")
+        {
+            return RadarStyle.Filled;
+        }
+
+        return RadarStyle.Marker;
+    }
+
+    private static ChartSplit SplitOf(string? name)
+    {
+        return name switch
+        {
+            "pos" => ChartSplit.Position,
+            "val" => ChartSplit.Value,
+            "percent" => ChartSplit.Percent,
+            _ => ChartSplit.Auto,
+        };
+    }
+
+    private static Trendline ReadTrendline(XElement element)
+    {
+        TrendlineKind kind = Value(element, "trendlineType") switch
+        {
+            "exp" => TrendlineKind.Exponential,
+            "log" => TrendlineKind.Logarithmic,
+            "movingAvg" => TrendlineKind.MovingAverage,
+            "poly" => TrendlineKind.Polynomial,
+            "power" => TrendlineKind.Power,
+            _ => TrendlineKind.Linear,
+        };
+
+        Trendline read = new()
+        {
+            Kind = kind,
+            Order = Clamped(Value(element, "order"), 2, 6) ?? 2,
+            Period = Clamped(Value(element, "period"), 2, 255) ?? 2,
+            Name = Limit(Child(element, "name")?.Value, 255),
+            Forward = Math.Max(0, Number(Value(element, "forward")) ?? 0),
+            Backward = Math.Max(0, Number(Value(element, "backward")) ?? 0),
+            Intercept = Number(Value(element, "intercept")),
+            DisplayEquation = Flag(element, "dispEq") ?? false,
+            DisplayRSquared = Flag(element, "dispRSqr") ?? false,
+        };
+
+        if (Child(element, "spPr") is XElement properties && DrawingReader.TryReadOutline(properties, out Outline? line) == true)
+        {
+            read = read with { Outline = line };
+        }
+
+        return read;
+    }
+
+    private static ErrorBars ReadErrorBars(XElement element)
+    {
+        ErrorBars read = new()
+        {
+            Direction = Value(element, "errDir") switch
+            {
+                "x" => ErrorBarDirection.X,
+                _ => ErrorBarDirection.Y,
+            },
+            Side = Value(element, "errBarType") switch
+            {
+                "plus" => ErrorBarSide.Plus,
+                "minus" => ErrorBarSide.Minus,
+                _ => ErrorBarSide.Both,
+            },
+            Amount = Value(element, "errValType") switch
+            {
+                "percentage" => ErrorBarAmount.Percentage,
+                "stdDev" => ErrorBarAmount.StandardDeviation,
+                "stdErr" => ErrorBarAmount.StandardError,
+                _ => ErrorBarAmount.Fixed,
+            },
+            Value = Math.Max(0, Number(Value(element, "val")) ?? 1),
+            NoEndCap = Flag(element, "noEndCap") ?? false,
+        };
+
+        if (Child(element, "spPr") is XElement properties && DrawingReader.TryReadOutline(properties, out Outline? line) == true)
+        {
+            read = read with { Outline = line };
+        }
+
+        return read;
     }
 
     private static ChartSpaceSeries ReadSeries(XElement element, ChartType type, ChartType chartType)
@@ -168,7 +500,7 @@ public static class ChartReader
         string valueName = "val";
         string categoryName = "cat";
 
-        if (type == ChartType.Scatter)
+        if (type is ChartType.Scatter or ChartType.Bubble)
         {
             valueName = "yVal";
             categoryName = "xVal";
@@ -269,6 +601,18 @@ public static class ChartReader
             series = series with { DataLabels = ReadLabels(labels) };
         }
 
+        if (Child(element, "bubbleSize") is XElement sizes)
+        {
+            series = series with { BubbleSizes = Data(sizes) };
+        }
+
+        series = series with
+        {
+            Explosion = Clamped(Value(element, "explosion"), 0, 400),
+            Trendlines = Children(element, "trendline").Take(8).Select(ReadTrendline).ToList(),
+            ErrorBars = Children(element, "errBars").Select(ReadErrorBars).DistinctBy(bars => bars.Direction).ToList(),
+        };
+
         return series with
         {
             PointColors = pointColors,
@@ -312,7 +656,7 @@ public static class ChartReader
 
     private static ChartSpace ReadAxes(ChartSpace space, (ChartType Type, XElement Element) main, List<string> mainAxes, Dictionary<string, XElement> axes, List<(ChartType Type, XElement Element)> plots)
     {
-        if (main.Type is ChartType.Pie or ChartType.Doughnut || mainAxes.Count < 2)
+        if (space.HasAxes == false || mainAxes.Count < 2)
         {
             return space;
         }
@@ -372,6 +716,27 @@ public static class ChartReader
         if (Number(Value(axis, "majorUnit")) is double unit && unit > 0)
         {
             read = read with { MajorUnit = unit };
+        }
+
+        if (Number(Value(axis, "minorUnit")) is double minor && minor > 0)
+        {
+            read = read with { MinorUnit = minor };
+        }
+
+        if (Number(Value(scaling, "logBase")) is double logBase && logBase >= 2 && logBase <= 1000)
+        {
+            read = read with { LogBase = logBase };
+        }
+
+        read = read with
+        {
+            Reversed = Value(scaling, "orientation") == "maxMin",
+            MinorGridlines = Child(axis, "minorGridlines") is not null,
+        };
+
+        if (Child(Child(axis, "minorGridlines"), "spPr") is XElement minorProperties && DrawingReader.TryReadOutline(minorProperties, out Outline? minorLine) == true)
+        {
+            read = read with { MinorGridlineOutline = minorLine };
         }
 
         if (Child(Child(axis, "majorGridlines"), "spPr") is XElement gridProperties && DrawingReader.TryReadOutline(gridProperties, out Outline? gridline) == true)

@@ -15,14 +15,22 @@ public class ChartTests
     [MemberData(nameof(Types))]
     public async Task Every_chart_type_validates_and_round_trips(ChartType type)
     {
+        List<ChartSpaceSeries> series =
+        [
+            new ChartSpaceSeries(ChartData.Reference("'Sales 2026'!$B$2:$B$13")) { Name = "2026", Categories = ChartData.Reference("'Sales 2026'!$A$2:$A$13"), Color = "#2384F9" },
+            new ChartSpaceSeries(ChartData.Reference("'Sales 2026'!$C$2:$C$13")) { Name = "2025", Categories = ChartData.Reference("'Sales 2026'!$A$2:$A$13") },
+        ];
+
+        // A stock chart has high, low and close.
+        if (type == ChartType.Stock)
+        {
+            series.Add(new ChartSpaceSeries(ChartData.Reference("'Sales 2026'!$D$2:$D$13")) { Name = "2024", Categories = ChartData.Reference("'Sales 2026'!$A$2:$A$13") });
+        }
+
         ChartSpace chart = new(type)
         {
             Title = "Sales per month",
-            Series =
-            [
-                new ChartSpaceSeries(ChartData.Reference("'Sales 2026'!$B$2:$B$13")) { Name = "2026", Categories = ChartData.Reference("'Sales 2026'!$A$2:$A$13"), Color = "#2384F9" },
-                new ChartSpaceSeries(ChartData.Reference("'Sales 2026'!$C$2:$C$13")) { Name = "2025", Categories = ChartData.Reference("'Sales 2026'!$A$2:$A$13") },
-            ],
+            Series = series,
             Legend = LegendPosition.Bottom,
             CategoryAxisTitle = "Month",
             ValueAxisTitle = "Amount",
