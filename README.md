@@ -106,7 +106,7 @@ The namespace `Avig.OpenXml.Drawing` holds what Excel, PowerPoint and Word write
   (`Outline`, `LineDash`), shadows and soft edges (`Shadow`);
 - text in shapes: paragraphs and runs with their own font (`ShapeText`, `TextRun`, `TextFont`,
   `TextAlignment`, `TextAnchor`, margins and wrapping);
-- groups, also inside groups (`ShapeGroup`, `GroupItem`), pictures (`Picture`: PNG, JPEG and GIF,
+- groups, also inside groups (`ShapeGroup`, `GroupItem`), pictures (`Picture`: PNG, JPEG, GIF, BMP and TIFF,
   with the size read from the file's header, and SVG with a PNG for older versions), and a link on
   a shape, a group or a picture (`Hyperlink`);
 - places and sizes in `Length` (`DrawingBounds`);

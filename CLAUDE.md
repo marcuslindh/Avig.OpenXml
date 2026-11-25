@@ -22,7 +22,7 @@ Från 0.2.0 finns också det som de tre delar:
   former och förinställd geometri (`Shape`, `ShapeKind`, `Shape.FromPreset`, `ShapeAdjustment`),
   fyllningar (`Fill`: färg, gradient, mönster, bild), linjer (`Outline`), skuggor och mjuka kanter
   (`Shadow`), text i former (`ShapeText`, `TextRun`, `TextFont`, `TextAlignment`, `TextAnchor`),
-  grupper (`ShapeGroup`, `GroupItem`, också nästlade), bilder (`Picture`, PNG/JPEG/GIF och SVG med
+  grupper (`ShapeGroup`, `GroupItem`, också nästlade), bilder (`Picture`, PNG/JPEG/GIF/BMP/TIFF och SVG med
   rasterbild som reserv, storleken ur filhuvudet), länkar (`Hyperlink`), platser i `Length`
   (`DrawingBounds`) och diagramdelen (`ChartSpace`, `ChartSpaceSeries`, `ChartData`,
   `ChartAxis`, `DataLabels` …). `DrawingWriter` och `ChartWriter` skriver, `DrawingReader` och

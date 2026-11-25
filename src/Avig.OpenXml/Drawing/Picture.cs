@@ -18,11 +18,17 @@ public enum PictureFormat
 
     /// <summary>SVG, stored with a PNG, JPEG or GIF that versions of Office before 2016 show instead.</summary>
     Svg,
+
+    /// <summary>BMP (a Windows bitmap). PowerPoint and Excel show it as it is; PowerPoint itself turns an inserted bitmap into a PNG.</summary>
+    Bmp,
+
+    /// <summary>TIFF, from the first image of the file.</summary>
+    Tiff,
 }
 
 /// <summary>
 /// An image to put on a sheet or a slide (Avig.Kalkyl's <c>AddPicture</c>), in a group, or as a
-/// <see cref="Fill.Picture(Picture)"/>. PNG, JPEG and GIF are accepted; the format and the size in
+/// <see cref="Fill.Picture(Picture)"/>. PNG, JPEG, GIF, BMP and TIFF are accepted; the format and the size in
 /// pixels are read from the file's header, so the image is stored exactly as given. An SVG comes in
 /// through <see cref="FromSvg(ReadOnlySpan{byte}, Picture)"/>, with a raster image that older
 /// versions of Office show instead.
@@ -75,12 +81,14 @@ public sealed record Picture
     /// <summary>The array behind the data, which identifies the image when it is put on a sheet more than once.</summary>
     internal byte[] Identity => data;
 
-    /// <summary>The extension of the image part: png, jpeg, gif or svg.</summary>
+    /// <summary>The extension of the image part: png, jpeg, gif, svg, bmp or tiff.</summary>
     public string Extension => Format switch
     {
         PictureFormat.Jpeg => "jpeg",
         PictureFormat.Gif => "gif",
         PictureFormat.Svg => "svg",
+        PictureFormat.Bmp => "bmp",
+        PictureFormat.Tiff => "tiff",
         _ => "png",
     };
 
@@ -96,12 +104,12 @@ public sealed record Picture
 
     /// <summary>Creates a picture from the bytes of an image file. The bytes are copied.</summary>
     /// <param name="data">The file's bytes.</param>
-    /// <returns>The picture, or Invalid when the bytes are not a PNG, JPEG or GIF whose size can be read.</returns>
+    /// <returns>The picture, or Invalid when the bytes are not a PNG, JPEG, GIF, BMP or TIFF whose size can be read.</returns>
     public static Result<Picture> FromBytes(ReadOnlySpan<byte> data)
     {
         if (TryReadHeader(data, out PictureFormat format, out int width, out int height) == false)
         {
-            return Result<Picture>.Invalid("The image is not a PNG, JPEG or GIF file, or its header is damaged.");
+            return Result<Picture>.Invalid("The image is not a PNG, JPEG, GIF, BMP or TIFF file, or its header is damaged.");
         }
 
         return new Picture(data.ToArray(), format, width, height);
@@ -110,7 +118,7 @@ public sealed record Picture
     /// <summary>Reads a picture from an image file.</summary>
     /// <param name="path">The file.</param>
     /// <param name="cancellationToken">Cancels the read.</param>
-    /// <returns>The picture, NotFound when there is no such file, or Invalid when it is not a PNG, JPEG or GIF.</returns>
+    /// <returns>The picture, NotFound when there is no such file, or Invalid when it is not a PNG, JPEG, GIF, BMP or TIFF.</returns>
     public static async Task<Result<Picture>> FromFileAsync(string path, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -135,7 +143,7 @@ public sealed record Picture
 
         if (TryReadHeader(bytes, out PictureFormat format, out int width, out int height) == false)
         {
-            return Result<Picture>.Invalid($"'{path}' is not a PNG, JPEG or GIF file, or its header is damaged.");
+            return Result<Picture>.Invalid($"'{path}' is not a PNG, JPEG, GIF, BMP or TIFF file, or its header is damaged.");
         }
 
         return new Picture(bytes, format, width, height);
@@ -311,8 +319,125 @@ public sealed record Picture
             format = PictureFormat.Jpeg;
             found = TryReadJpegSize(data, out width, out height);
         }
+        else if (data.Length >= 26 && data[0] == (byte)'B' && data[1] == (byte)'M')
+        {
+            format = PictureFormat.Bmp;
+            found = TryReadBmpSize(data, out width, out height);
+        }
+        else if (data.Length >= 8 && (data[..4].SequenceEqual((ReadOnlySpan<byte>)[0x49, 0x49, 0x2A, 0x00]) == true || data[..4].SequenceEqual((ReadOnlySpan<byte>)[0x4D, 0x4D, 0x00, 0x2A]) == true))
+        {
+            format = PictureFormat.Tiff;
+            found = TryReadTiffSize(data, out width, out height);
+        }
 
         return found == true && width > 0 && height > 0;
+    }
+
+    /// <summary>The size from a BMP's DIB header: 16-bit in the old core header, 32-bit (the height negative for a top-down bitmap) in the others.</summary>
+    private static bool TryReadBmpSize(ReadOnlySpan<byte> data, out int width, out int height)
+    {
+        uint header = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(14, 4));
+
+        if (header == 12)
+        {
+            width = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(18, 2));
+            height = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(20, 2));
+
+            return true;
+        }
+
+        width = 0;
+        height = 0;
+
+        if (header < 40)
+        {
+            return false;
+        }
+
+        int readWidth = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(18, 4));
+        int readHeight = BinaryPrimitives.ReadInt32LittleEndian(data.Slice(22, 4));
+
+        if (readWidth <= 0 || readHeight == 0 || readHeight == int.MinValue)
+        {
+            return false;
+        }
+
+        width = readWidth;
+        height = Math.Abs(readHeight);
+
+        return true;
+    }
+
+    /// <summary>The size from the first image file directory of a TIFF: the ImageWidth (256) and ImageLength (257) tags, short or long.</summary>
+    private static bool TryReadTiffSize(ReadOnlySpan<byte> data, out int width, out int height)
+    {
+        width = 0;
+        height = 0;
+        bool little = data[0] == 0x49;
+        uint offset = Read32(data, 4, little);
+
+        if (offset > (uint)data.Length - 2 || offset < 8)
+        {
+            return false;
+        }
+
+        int start = (int)offset;
+        int entries = Read16(data, start, little);
+
+        // Each entry is 12 bytes; the loop reads no further than the data holds.
+        for (int entry = 0; entry < entries; entry++)
+        {
+            int position = start + 2 + (entry * 12);
+
+            if (position + 12 > data.Length)
+            {
+                return false;
+            }
+
+            int tag = Read16(data, position, little);
+            int type = Read16(data, position + 2, little);
+            uint value = Read32(data, position + 8, little);
+
+            if (type == 3)
+            {
+                value = (uint)Read16(data, position + 8, little);
+            }
+            else if (type != 4)
+            {
+                continue;
+            }
+
+            if (tag == 256)
+            {
+                width = (int)Math.Min(value, int.MaxValue);
+            }
+            else if (tag == 257)
+            {
+                height = (int)Math.Min(value, int.MaxValue);
+            }
+        }
+
+        return width > 0 && height > 0;
+    }
+
+    private static int Read16(ReadOnlySpan<byte> data, int position, bool little)
+    {
+        if (little == true)
+        {
+            return BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(position, 2));
+        }
+
+        return BinaryPrimitives.ReadUInt16BigEndian(data.Slice(position, 2));
+    }
+
+    private static uint Read32(ReadOnlySpan<byte> data, int position, bool little)
+    {
+        if (little == true)
+        {
+            return BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(position, 4));
+        }
+
+        return BinaryPrimitives.ReadUInt32BigEndian(data.Slice(position, 4));
     }
 
     /// <summary>Walks the JPEG segments to the first frame header (SOF), which holds the size.</summary>
