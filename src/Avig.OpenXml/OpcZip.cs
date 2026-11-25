@@ -39,25 +39,23 @@ public static class OpcZip
     }
 
     /// <summary>
-    /// Invalid for a zip directory no office program writes: two entries with the same name
-    /// (case ignored, \ read as /), a name that climbs out of the package (..), starts at a root
-    /// or a drive, or holds control characters, and an entry that cannot be unpacked (a
-    /// compression method .NET does not have, or encryption). Duplicates let two readers see two
-    /// different files; such names would be passed on when the file is saved, to whoever unpacks
-    /// it next; and an entry that cannot be opened would otherwise fail only when it is saved.
+    /// Invalid for a zip directory no office program writes: two entries that are the same part
+    /// (case and Unicode compatibility forms folded, \ read as /), a name no package may have
+    /// (<see cref="OpcPath.IsSafe"/>: climbing out with .., rooted, a : or a device name, a
+    /// percent-encoded separator …), a folder that holds data, and an entry that is encrypted or
+    /// cannot be unpacked (a compression method .NET does not have). Empty folders, which zip
+    /// programs add when a document is packed again, are let through and are not parts.
+    /// Duplicates let two readers see two different files; such names would be passed on when
+    /// the file is saved, to whoever unpacks it next; and an entry that cannot be opened would
+    /// otherwise fail only when it is saved.
     /// </summary>
     public static async Task<Result> CheckEntriesAsync(ZipArchive archive, CancellationToken cancellationToken)
     {
-        HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> names = new(StringComparer.Ordinal);
 
         foreach (ZipArchiveEntry entry in archive.Entries)
         {
             string name = entry.FullName.Replace('\\', '/');
-
-            if (names.Add(name) == false)
-            {
-                return Result.Invalid($"{OpcErrors.DamagedPrefix}: the part '{entry.FullName}' is in it twice.");
-            }
 
             // An empty name opened fine and then failed the save, where the entry is written again.
             if (name.Length == 0)
@@ -65,12 +63,32 @@ public static class OpcZip
                 return Result.Invalid($"{OpcErrors.DamagedPrefix}: it has a part without a name.");
             }
 
-            bool climbs = name.Split('/').Contains("..");
-            bool rooted = name.StartsWith('/') == true || (name.Length >= 2 && name[1] == ':');
+            // A folder, which zip programs add when a document is packed again, is not a part. One
+            // that holds data is not a folder either.
+            if (name.EndsWith('/') == true && entry.Length == 0)
+            {
+                if (OpcPath.IsSafe(name.TrimEnd('/')) == false)
+                {
+                    return Result.Invalid($"{OpcErrors.DamagedPrefix}: the folder name '{entry.FullName}' points outside the package.");
+                }
 
-            if (climbs == true || rooted == true || name.Any(char.IsControl) == true)
+                continue;
+            }
+
+            if (names.Add(OpcPath.ComparisonKey(name)) == false)
+            {
+                return Result.Invalid($"{OpcErrors.DamagedPrefix}: the part '{entry.FullName}' is in it twice.");
+            }
+
+            if (OpcPath.IsSafe(name) == false)
             {
                 return Result.Invalid($"{OpcErrors.DamagedPrefix}: the part name '{entry.FullName}' points outside the package.");
+            }
+
+            // .NET opens an entry marked encrypted as if it were not, and gives its encrypted bytes.
+            if (entry.IsEncrypted == true)
+            {
+                return Result.Invalid($"{OpcErrors.DamagedPrefix}: the part '{entry.FullName}' is encrypted.");
             }
 
             try

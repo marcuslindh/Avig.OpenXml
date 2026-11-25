@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Avig.OpenXml;
 
 /// <summary>
@@ -112,9 +114,8 @@ public static class OpcPath
     }
 
     /// <summary>
-    /// A part name as zip entries hold it: / instead of \, no leading slash. Null for a name no
-    /// package may have: empty, climbing out of the package with .., rooted at a drive, or with
-    /// control characters.
+    /// A part name as zip entries hold it: / instead of \, no leading slash. False for a name no
+    /// package may have (see <see cref="IsSafe"/>).
     /// </summary>
     public static bool TryNormalize(string name, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? normalized)
     {
@@ -126,13 +127,74 @@ public static class OpcPath
             cleaned = cleaned[1..];
         }
 
-        if (cleaned.Length == 0 || cleaned.Split('/').Contains("..") == true || cleaned.StartsWith('/') == true
-            || (cleaned.Length >= 2 && cleaned[1] == ':') || cleaned.Any(char.IsControl) == true)
+        if (IsSafe(cleaned) == false)
         {
             return false;
         }
 
         normalized = cleaned;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Whether a part name, with / for \ and no leading slash, is one a package may have. Not:
+    /// empty; rooted (/, //server, C:); with a segment that is empty, . or .., or ends with a dot
+    /// or a space (Windows drops those, so two names would be one file); with : (an NTFS stream)
+    /// or control characters; with a percent-encoded dot, slash, backslash or NUL; with a
+    /// Windows device name (CON, NUL, COM1 …) as a segment; or one of these once Unicode
+    /// compatibility forms are folded (a fullwidth ．．／ is ../ to some unpackers). OPC forbids
+    /// most of it (ECMA-376 part 2, 6.2.2), and no office program writes the rest; each is a way
+    /// for a file to put something where it does not belong when it is unpacked or saved again.
+    /// </summary>
+    public static bool IsSafe(string name)
+    {
+        if (IsSafeAsWritten(name) == false)
+        {
+            return false;
+        }
+
+        string folded = name.Normalize(NormalizationForm.FormKC).Replace('\\', '/');
+
+        return string.Equals(folded, name, StringComparison.Ordinal) == true || IsSafeAsWritten(folded) == true;
+    }
+
+    /// <summary>The key two part names share when they are the same file to a reader or an unpacker: case and Unicode compatibility forms folded.</summary>
+    public static string ComparisonKey(string name)
+    {
+        return name.Replace('\\', '/').Normalize(NormalizationForm.FormKC).ToUpperInvariant();
+    }
+
+    private static readonly string[] DeviceNames = ["CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"];
+
+    private static readonly string[] EncodedSeparators = ["%2e", "%2f", "%5c", "%00"];
+
+    private static bool IsSafeAsWritten(string name)
+    {
+        if (name.Length == 0 || name.StartsWith('/') == true || name.Contains(':', StringComparison.Ordinal) == true || name.Any(char.IsControl) == true)
+        {
+            return false;
+        }
+
+        if (EncodedSeparators.Any(encoded => name.Contains(encoded, StringComparison.OrdinalIgnoreCase) == true) == true)
+        {
+            return false;
+        }
+
+        foreach (string segment in name.Split('/'))
+        {
+            if (segment.Length == 0 || segment.EndsWith('.') == true || segment.EndsWith(' ') == true)
+            {
+                return false;
+            }
+
+            string baseName = segment.Split('.')[0].TrimEnd();
+
+            if (DeviceNames.Contains(baseName, StringComparer.OrdinalIgnoreCase) == true)
+            {
+                return false;
+            }
+        }
 
         return true;
     }

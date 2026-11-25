@@ -434,13 +434,14 @@ public sealed class OpcPackage : IAsyncDisposable
 
         foreach (ZipArchiveEntry entry in archive.Entries)
         {
+            string name = entry.FullName.Replace('\\', '/');
+
             // Folders in the zip directory are not parts.
-            if (entry.FullName.EndsWith('/') == true && entry.Length == 0)
+            if (name.EndsWith('/') == true && entry.Length == 0)
             {
                 continue;
             }
 
-            string name = entry.FullName.Replace('\\', '/');
             parts[name] = new Part(name, null, entry.Length, entry, null);
         }
 
@@ -545,6 +546,7 @@ public sealed class OpcPackage : IAsyncDisposable
 
         Dictionary<string, Part> parts = new(StringComparer.OrdinalIgnoreCase);
         bool sawPackage = false;
+        HashSet<string> keys = new(StringComparer.Ordinal);
 
         // The package wraps every part in pkg:package/pkg:part/pkg:xmlData, three levels more than the part itself has.
         using (XmlReader reader = OpcXml.CreateReader(source, options.MaxXmlDepth + 3))
@@ -580,7 +582,7 @@ public sealed class OpcPackage : IAsyncDisposable
                     return Result<OpcPackage>.Failure(error, status);
                 }
 
-                if (parts.TryAdd(value.Name, value) == false)
+                if (keys.Add(OpcPath.ComparisonKey(value.Name)) == false || parts.TryAdd(value.Name, value) == false)
                 {
                     return Result<OpcPackage>.Invalid($"{OpcErrors.DamagedPrefix}: the part '{value.Name}' is in it twice.");
                 }
