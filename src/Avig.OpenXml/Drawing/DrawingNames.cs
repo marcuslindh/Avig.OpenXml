@@ -27,6 +27,7 @@ internal static class DrawingNames
     [
         (LineDash.RoundDot, "sysDot"), (LineDash.SquareDot, "sysDash"), (LineDash.Dash, "dash"), (LineDash.DashDot, "dashDot"),
         (LineDash.LongDash, "lgDash"), (LineDash.LongDashDot, "lgDashDot"), (LineDash.LongDashDotDot, "lgDashDotDot"), (LineDash.Solid, "solid"),
+        (LineDash.Dot, "dot"), (LineDash.SystemDashDot, "sysDashDot"), (LineDash.SystemDashDotDot, "sysDashDotDot"),
     ];
 
     private static readonly (MarkerStyle Style, string Name)[] Markers =

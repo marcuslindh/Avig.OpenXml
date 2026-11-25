@@ -9,7 +9,7 @@ namespace Avig.OpenXml.Drawing;
 /// clamped, never thrown, since the file may come from anyone. What the types cannot hold (a
 /// theme colour, a custom geometry, a chart inside a group) is left out.
 /// </summary>
-public static class DrawingReader
+public static partial class DrawingReader
 {
     /// <summary>The most images one element may refer to, so that a hostile group cannot make the reader fetch without end.</summary>
     private const int MaxImages = 4096;
@@ -316,7 +316,7 @@ public static class DrawingReader
     }
 
     /// <summary>The parsing itself, with the images already fetched, so that it needs no I/O.</summary>
-    private sealed class Reader
+    private sealed partial class Reader
     {
         private readonly DrawingReadContext? context;
         private readonly Dictionary<string, Picture> images;
@@ -458,12 +458,63 @@ public static class DrawingReader
                 outline = readOutline;
             }
 
-            Effects(Child(properties, "effectLst"), out Shadow? outer, out Shadow? inner, out double? softEdges);
+            XElement? effects = Child(properties, "effectLst");
+            Effects(effects, out Shadow? outer, out Shadow? inner, out double? softEdges);
+            MoreEffects(effects, out GlowEffect? glow, out ReflectionEffect? reflection, out BlurEffect? blur, out PresetShadow? presetShadow, out FillOverlayEffect? overlay);
+            ThreeD(properties, out Scene3D? scene, out Shape3D? threeD);
+            XElement? bodyProperties = Child(Child(element, "txBody"), "bodyPr");
+
+            if (scene is not null && Child(bodyProperties, "flatTx") is not null)
+            {
+                scene = scene with { KeepTextFlat = true };
+            }
+
+            if (Child(properties, "custGeom") is XElement custom)
+            {
+                if (TryCustomGeometry(custom, out CustomGeometry? read) == true)
+                {
+                    shape = Shape.FromGeometry(read);
+                    adjustments.Clear();
+                    cornerRadius = null;
+                }
+            }
+
+            if (DrawingValues.Boolean(element.Attribute("useBgFill")?.Value, false) == true)
+            {
+                fill = Fill.Background;
+            }
+
+            XElement? connectorProperties = Child(Child(element, "nvCxnSpPr"), "cNvCxnSpPr");
             ShapeText? text = null;
 
-            if (shape.Kind != ShapeKind.Line && TryText(Child(element, "txBody"), out ShapeText? readText) == true)
+            if (shape.IsConnector == false && TryText(Child(element, "txBody"), out ShapeText? readText) == true)
             {
                 text = readText;
+            }
+
+            TryStyle(Child(element, "style"), out ShapeStyle? style);
+
+            shape = shape with
+            {
+                Glow = glow,
+                Reflection = reflection,
+                Blur = blur,
+                PresetShadow = presetShadow,
+                FillOverlay = overlay,
+                Scene3D = scene,
+                Shape3D = threeD,
+                StartConnection = Connection(Child(connectorProperties, "stCxn")),
+                EndConnection = Connection(Child(connectorProperties, "endCxn")),
+                Locks = Locks(Child(Child(Child(element, "nvSpPr"), "cNvSpPr"), "spLocks") ?? Child(connectorProperties, "cxnSpLocks")),
+                IsHidden = DrawingValues.Boolean(nonVisual?.Attribute("hidden")?.Value, false),
+                IsDecorative = IsDecorative(nonVisual),
+                Title = DrawingText(nonVisual?.Attribute("title")?.Value),
+            };
+
+            // The style Office gives a new shape of the kind is no style of its own.
+            if (style is not null && style != DrawingWriter.DefaultStyle(shape))
+            {
+                shape = shape with { Style = style };
             }
 
             shape = shape with
@@ -565,11 +616,17 @@ public static class DrawingReader
                 return false;
             }
 
+            XElement? groupTransform = Child(Child(element, "grpSpPr"), "xfrm");
             ShapeGroup group = new(items)
             {
                 Link = Link(nonVisual),
                 Name = DrawingText(nonVisual?.Attribute("name")?.Value),
                 Description = DrawingText(nonVisual?.Attribute("descr")?.Value),
+                Rotation = Rotation(groupTransform),
+                FlipHorizontal = DrawingValues.Boolean(groupTransform?.Attribute("flipH")?.Value, false),
+                FlipVertical = DrawingValues.Boolean(groupTransform?.Attribute("flipV")?.Value, false),
+                Locks = Locks(Child(Child(Child(element, "nvGrpSpPr"), "cNvGrpSpPr"), "grpSpLocks")),
+                IsHidden = DrawingValues.Boolean(nonVisual?.Attribute("hidden")?.Value, false),
             };
 
             item = new ShapeTreeItem(ShapeTreeItemKind.Group, Id(nonVisual), nonVisual?.Attribute("name")?.Value ?? string.Empty, Bounds(Child(Child(element, "grpSpPr"), "xfrm")))
@@ -660,6 +717,11 @@ public static class DrawingReader
                     case "gradFill":
                         return TryGradient(child, out fill);
 
+                    case "grpFill":
+                        fill = Fill.Group;
+
+                        return true;
+
                     case "pattFill":
                         if (TryColor(Child(child, "fgClr"), out string? foreground, out _) == true && TryColor(Child(child, "bgClr"), out string? background, out _) == true)
                         {
@@ -673,7 +735,7 @@ public static class DrawingReader
                     case "blipFill":
                         if (TryBlip(Child(child, "blip"), out Picture? image) == true)
                         {
-                            fill = Fill.Picture(image);
+                            fill = PictureDetails(child, Fill.Picture(image));
 
                             return true;
                         }
@@ -715,7 +777,7 @@ public static class DrawingReader
                 angle = Math.Clamp(rawAngle / 60_000.0, -360, 360);
             }
 
-            fill = Fill.Gradient(angle, [.. stops]);
+            fill = GradientDetails(element, Fill.Gradient(angle, [.. stops]));
 
             return true;
         }
@@ -771,11 +833,6 @@ public static class DrawingReader
                 return true;
             }
 
-            if (TryColor(Child(line, "solidFill"), out string? color, out double transparency) == false)
-            {
-                return false;
-            }
-
             double width = 0.75;
 
             if (DrawingValues.TryLong(line.Attribute("w")?.Value, out long emu) == true)
@@ -783,11 +840,20 @@ public static class DrawingReader
                 width = Math.Clamp(DrawingValues.Points(emu), 0, 1584);
             }
 
-            outline = new Outline(color, width)
+            if (TryColor(Child(line, "solidFill"), out string? color, out double transparency) == true)
             {
-                Dash = DrawingNames.DashOf(Child(line, "prstDash")?.Attribute("val")?.Value),
-                Transparency = transparency,
-            };
+                outline = new Outline(color, width) { Transparency = transparency };
+            }
+            else if ((Child(line, "gradFill") is not null || Child(line, "pattFill") is not null) && TryFill(line, out Fill? lineFill) == true && lineFill.Kind is FillKind.Gradient or FillKind.Pattern)
+            {
+                outline = new Outline(lineFill, width);
+            }
+            else
+            {
+                return false;
+            }
+
+            outline = LineDetails(line, outline with { Dash = DrawingNames.DashOf(Child(line, "prstDash")?.Attribute("val")?.Value) });
 
             return true;
         }
@@ -800,7 +866,7 @@ public static class DrawingReader
 
             if (Child(effects, "outerShdw") is XElement outerShadow && TryShadow(outerShadow, out Shadow? readOuter) == true)
             {
-                outer = readOuter;
+                outer = ShadowDetails(outerShadow, readOuter);
             }
 
             if (Child(effects, "innerShdw") is XElement innerShadow && TryShadow(innerShadow, out Shadow? readInner) == true)

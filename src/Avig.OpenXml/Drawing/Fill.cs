@@ -5,7 +5,7 @@ namespace Avig.OpenXml.Drawing;
 /// <see cref="Solid(string, double)"/> colour, a linear <see cref="Gradient(double, GradientStop[])"/>,
 /// a two-colour <see cref="Pattern(FillPattern, string, string)"/> or a <see cref="Picture(Drawing.Picture)"/>.
 /// </summary>
-public sealed record Fill
+public sealed partial record Fill
 {
     private Fill(FillKind kind, string? color, double transparency, double angle, IReadOnlyList<GradientStop> stops)
     {
@@ -134,6 +134,12 @@ public enum FillKind
 
     /// <summary>An image.</summary>
     Picture,
+
+    /// <summary>The fill of the group the shape is in (a:grpFill).</summary>
+    Group,
+
+    /// <summary>The slide's background, as if the shape were a hole in what lies under it (p:sp useBgFill).</summary>
+    Background,
 }
 
 /// <summary>A colour at a position in a <see cref="Fill.Gradient(double, GradientStop[])"/>.</summary>

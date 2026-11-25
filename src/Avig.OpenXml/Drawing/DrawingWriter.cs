@@ -29,8 +29,9 @@ public static partial class DrawingWriter
         ShapeTreeNamespace tree = context.Tree;
         int shapeId = context.NextShapeId();
         string name = shape.Name ?? PresetGeometry.DefaultName(shape) + " " + DrawingValues.Text(shapeId - 1);
-        bool line = shape.Kind == ShapeKind.Line;
+        bool line = shape.IsConnector;
         bool textBox = shape.Kind == ShapeKind.TextBox;
+        NonVisualExtras extras = new(shape.IsHidden, shape.Title, shape.IsDecorative);
 
         if (line == true)
         {
@@ -42,8 +43,12 @@ public static partial class DrawingWriter
             }
 
             xml.WriteStartElement(tree.Prefix, "nvCxnSpPr", tree.Uri);
-            WriteNonVisualProperties(xml, tree, shapeId, name, shape.Description, shape.Link, context);
-            xml.WriteElementString(tree.Prefix, "cNvCxnSpPr", tree.Uri, string.Empty);
+            WriteNonVisualProperties(xml, tree, shapeId, name, shape.Description, shape.Link, context, extras);
+            xml.WriteStartElement(tree.Prefix, "cNvCxnSpPr", tree.Uri);
+            WriteLocks(xml, "cxnSpLocks", shape.Locks);
+            WriteConnection(xml, "stCxn", shape.StartConnection);
+            WriteConnection(xml, "endCxn", shape.EndConnection);
+            xml.WriteEndElement();
             WriteApplicationProperties(xml, tree);
             xml.WriteEndElement();
         }
@@ -57,8 +62,14 @@ public static partial class DrawingWriter
                 xml.WriteAttributeString(null, "textlink", null, string.Empty);
             }
 
+            // Only a slide's shapes can show the slide's background.
+            if (shape.Fill?.Kind == FillKind.Background && tree.Uri == OpcNamespaces.PresentationMain)
+            {
+                xml.WriteAttributeString(null, "useBgFill", null, "1");
+            }
+
             xml.WriteStartElement(tree.Prefix, "nvSpPr", tree.Uri);
-            WriteNonVisualProperties(xml, tree, shapeId, name, shape.Description, shape.Link, context);
+            WriteNonVisualProperties(xml, tree, shapeId, name, shape.Description, shape.Link, context, extras);
             xml.WriteStartElement(tree.Prefix, "cNvSpPr", tree.Uri);
 
             if (textBox == true)
@@ -66,6 +77,7 @@ public static partial class DrawingWriter
                 xml.WriteAttributeString(null, "txBox", null, "1");
             }
 
+            WriteLocks(xml, "spLocks", shape.Locks);
             xml.WriteEndElement();
             WriteApplicationProperties(xml, tree);
             xml.WriteEndElement();
@@ -99,7 +111,15 @@ public static partial class DrawingWriter
             adjustments.Insert(0, new ShapeAdjustment("adj", DrawingValues.Percent(radius)));
         }
 
-        WritePresetGeometry(xml, shape.Preset, adjustments);
+        if (shape.Geometry is CustomGeometry geometry)
+        {
+            WriteCustomGeometry(xml, geometry);
+        }
+        else
+        {
+            WritePresetGeometry(xml, shape.Preset, adjustments);
+        }
+
         Fill? fill = shape.Fill;
         Outline? outline = shape.Outline;
 
@@ -120,17 +140,20 @@ public static partial class DrawingWriter
             WriteOutline(xml, outline);
         }
 
-        if (shape.Shadow is not null || shape.InnerShadow is not null || shape.SoftEdges is not null)
+        EffectSet effects = EffectSet.Of(shape);
+
+        if (effects.Any == true)
         {
-            WriteEffects(xml, shape.Shadow, shape.InnerShadow, shape.SoftEdges);
+            WriteEffectList(xml, effects);
         }
 
+        WriteThreeD(xml, shape.Scene3D, shape.Shape3D);
         xml.WriteEndElement();
-        WriteStyle(xml, tree, shape.Kind);
+        WriteShapeStyle(xml, tree, shape.Style ?? DefaultStyle(shape));
 
         if (line == false)
         {
-            WriteTextBody(xml, tree, shape.Text);
+            WriteTextBody(xml, tree, shape.Text, shape.Scene3D?.KeepTextFlat == true);
         }
 
         xml.WriteEndElement();
@@ -193,8 +216,10 @@ public static partial class DrawingWriter
         int shapeId = context.NextShapeId();
         xml.WriteStartElement(tree.Prefix, "grpSp", tree.Uri);
         xml.WriteStartElement(tree.Prefix, "nvGrpSpPr", tree.Uri);
-        WriteNonVisualProperties(xml, tree, shapeId, group.Name ?? "Group " + DrawingValues.Text(shapeId - 1), group.Description, group.Link, context);
-        xml.WriteElementString(tree.Prefix, "cNvGrpSpPr", tree.Uri, string.Empty);
+        WriteNonVisualProperties(xml, tree, shapeId, group.Name ?? "Group " + DrawingValues.Text(shapeId - 1), group.Description, group.Link, context, new NonVisualExtras(group.IsHidden, null, false));
+        xml.WriteStartElement(tree.Prefix, "cNvGrpSpPr", tree.Uri);
+        WriteLocks(xml, "grpSpLocks", group.Locks);
+        xml.WriteEndElement();
         WriteApplicationProperties(xml, tree);
         xml.WriteEndElement();
 
@@ -206,6 +231,22 @@ public static partial class DrawingWriter
         long bottom = group.Items.Max(item => item.Bounds.Top.Emu + item.Bounds.Height.Emu);
         xml.WriteStartElement(tree.Prefix, "grpSpPr", tree.Uri);
         xml.WriteStartElement("a", "xfrm", Main);
+
+        if (group.Rotation != 0)
+        {
+            xml.WriteAttributeString(null, "rot", null, DrawingValues.Text(DrawingValues.Angle(group.Rotation)));
+        }
+
+        if (group.FlipHorizontal == true)
+        {
+            xml.WriteAttributeString(null, "flipH", null, "1");
+        }
+
+        if (group.FlipVertical == true)
+        {
+            xml.WriteAttributeString(null, "flipV", null, "1");
+        }
+
         WriteOffsetAndExtent(xml, frame);
         xml.WriteStartElement("a", "chOff", Main);
         xml.WriteAttributeString(null, "x", null, DrawingValues.Text(left));
@@ -320,18 +361,36 @@ public static partial class DrawingWriter
                 }
 
                 xml.WriteStartElement("a", "blipFill", Main);
-                xml.WriteAttributeString(null, "rotWithShape", null, "1");
+                xml.WriteAttributeString(null, "rotWithShape", null, DrawingValues.Flag(fill.RotateWithShape));
                 WriteBlip(xml, fill.Image!, context, 0);
-                xml.WriteStartElement("a", "stretch", Main);
-                xml.WriteElementString("a", "fillRect", Main, string.Empty);
-                xml.WriteEndElement();
+
+                if (fill.Tiling is PictureTiling tiling)
+                {
+                    WriteTile(xml, tiling);
+                }
+                else
+                {
+                    xml.WriteStartElement("a", "stretch", Main);
+                    xml.WriteElementString("a", "fillRect", Main, string.Empty);
+                    xml.WriteEndElement();
+                }
+
                 xml.WriteEndElement();
 
                 break;
 
+            case FillKind.Group:
+                xml.WriteElementString("a", "grpFill", Main, string.Empty);
+
+                break;
+
+            case FillKind.Background:
+                // The shape's useBgFill says it; the shape properties hold no fill.
+                break;
+
             default:
                 xml.WriteStartElement("a", "gradFill", Main);
-                xml.WriteAttributeString(null, "rotWithShape", null, "1");
+                xml.WriteAttributeString(null, "rotWithShape", null, DrawingValues.Flag(fill.RotateWithShape));
                 xml.WriteStartElement("a", "gsLst", Main);
 
                 foreach (GradientStop stop in fill.Stops.OrderBy(stop => stop.Position))
@@ -343,10 +402,7 @@ public static partial class DrawingWriter
                 }
 
                 xml.WriteEndElement();
-                xml.WriteStartElement("a", "lin", Main);
-                xml.WriteAttributeString(null, "ang", null, DrawingValues.Text(DrawingValues.Angle(fill.Angle)));
-                xml.WriteAttributeString(null, "scaled", null, "0");
-                xml.WriteEndElement();
+                WriteGradientShape(xml, fill);
                 xml.WriteEndElement();
 
                 break;
@@ -371,17 +427,20 @@ public static partial class DrawingWriter
         }
 
         xml.WriteAttributeString(null, "w", null, DrawingValues.Text(DrawingValues.Emu(outline.Width)));
-        xml.WriteStartElement("a", "solidFill", Main);
-        WriteColor(xml, outline.Color, outline.Transparency);
-        xml.WriteEndElement();
+        WriteLineAttributes(xml, outline);
 
-        if (outline.Dash != LineDash.Solid)
+        if (outline.LineFill is Fill lineFill)
         {
-            xml.WriteStartElement("a", "prstDash", Main);
-            xml.WriteAttributeString(null, "val", null, DrawingNames.Dash(outline.Dash));
+            WriteFill(xml, lineFill, null);
+        }
+        else
+        {
+            xml.WriteStartElement("a", "solidFill", Main);
+            WriteColor(xml, outline.Color, outline.Transparency);
             xml.WriteEndElement();
         }
 
+        WriteLineDetails(xml, outline);
         xml.WriteEndElement();
     }
 
@@ -393,34 +452,7 @@ public static partial class DrawingWriter
     public static void WriteEffects(XmlWriter xml, Shadow? outer, Shadow? inner, double? softEdges)
     {
         ArgumentNullException.ThrowIfNull(xml);
-        xml.WriteStartElement("a", "effectLst", Main);
-
-        if (inner is not null)
-        {
-            xml.WriteStartElement("a", "innerShdw", Main);
-            WriteShadowAttributes(xml, inner);
-            WriteColor(xml, inner.Color, inner.Transparency);
-            xml.WriteEndElement();
-        }
-
-        if (outer is not null)
-        {
-            xml.WriteStartElement("a", "outerShdw", Main);
-            WriteShadowAttributes(xml, outer);
-            xml.WriteAttributeString(null, "algn", null, "tl");
-            xml.WriteAttributeString(null, "rotWithShape", null, "0");
-            WriteColor(xml, outer.Color, outer.Transparency);
-            xml.WriteEndElement();
-        }
-
-        if (softEdges is double points)
-        {
-            xml.WriteStartElement("a", "softEdge", Main);
-            xml.WriteAttributeString(null, "rad", null, DrawingValues.Text(DrawingValues.Emu(points)));
-            xml.WriteEndElement();
-        }
-
-        xml.WriteEndElement();
+        WriteEffectList(xml, new EffectSet(outer, inner, softEdges));
     }
 
     /// <summary>
@@ -524,49 +556,8 @@ public static partial class DrawingWriter
         xml.WriteEndElement();
     }
 
-    /// <summary>The theme references Office gives a new shape, so that what is left unset looks as in Office.</summary>
-    private static void WriteStyle(XmlWriter xml, ShapeTreeNamespace tree, ShapeKind? kind)
-    {
-        (string Line, string Fill, string Effect, string Font, bool Shade) style = kind switch
-        {
-            ShapeKind.Line => ("1", "0", "0", "tx1", false),
-            ShapeKind.TextBox => ("0", "0", "0", "dk1", false),
-            _ => ("2", "1", "0", "lt1", true),
-        };
-
-        xml.WriteStartElement(tree.Prefix, "style", tree.Uri);
-        WriteStyleReference(xml, "lnRef", style.Line, "accent1", style.Shade);
-        WriteStyleReference(xml, "fillRef", style.Fill, "accent1", false);
-        WriteStyleReference(xml, "effectRef", style.Effect, "accent1", false);
-        xml.WriteStartElement("a", "fontRef", Main);
-        xml.WriteAttributeString(null, "idx", null, "minor");
-        xml.WriteStartElement("a", "schemeClr", Main);
-        xml.WriteAttributeString(null, "val", null, style.Font);
-        xml.WriteEndElement();
-        xml.WriteEndElement();
-        xml.WriteEndElement();
-    }
-
-    private static void WriteStyleReference(XmlWriter xml, string element, string index, string color, bool shade)
-    {
-        xml.WriteStartElement("a", element, Main);
-        xml.WriteAttributeString(null, "idx", null, index);
-        xml.WriteStartElement("a", "schemeClr", Main);
-        xml.WriteAttributeString(null, "val", null, color);
-
-        if (shade == true)
-        {
-            xml.WriteStartElement("a", "shade", Main);
-            xml.WriteAttributeString(null, "val", null, "15000");
-            xml.WriteEndElement();
-        }
-
-        xml.WriteEndElement();
-        xml.WriteEndElement();
-    }
-
     /// <summary>The shape's txBody: one a:p per line of the runs, each run with its own look.</summary>
-    private static void WriteTextBody(XmlWriter xml, ShapeTreeNamespace tree, ShapeText? text)
+    private static void WriteTextBody(XmlWriter xml, ShapeTreeNamespace tree, ShapeText? text, bool flatText)
     {
         xml.WriteStartElement(tree.Prefix, "txBody", tree.Uri);
         xml.WriteStartElement("a", "bodyPr", Main);
@@ -592,6 +583,12 @@ public static partial class DrawingWriter
 
         xml.WriteAttributeString(null, "rtlCol", null, "0");
         xml.WriteAttributeString(null, "anchor", null, DrawingNames.Anchor(text?.Vertical ?? TextAnchor.Top));
+
+        if (flatText == true)
+        {
+            xml.WriteElementString("a", "flatTx", Main, string.Empty);
+        }
+
         xml.WriteEndElement();
         xml.WriteElementString("a", "lstStyle", Main, string.Empty);
         string alignment = DrawingNames.Alignment(text?.Horizontal ?? TextAlignment.Left);
@@ -693,7 +690,7 @@ public static partial class DrawingWriter
     }
 
     /// <summary>A cNvPr: id, name, alternative text and the click's link.</summary>
-    private static void WriteNonVisualProperties(XmlWriter xml, ShapeTreeNamespace tree, int shapeId, string name, string? description, Hyperlink? link, DrawingContext context)
+    private static void WriteNonVisualProperties(XmlWriter xml, ShapeTreeNamespace tree, int shapeId, string name, string? description, Hyperlink? link, DrawingContext context, NonVisualExtras extras = default)
     {
         xml.WriteStartElement(tree.Prefix, "cNvPr", tree.Uri);
         xml.WriteAttributeString(null, "id", null, DrawingValues.Text(shapeId));
@@ -702,6 +699,16 @@ public static partial class DrawingWriter
         if (description is not null)
         {
             xml.WriteAttributeString(null, "descr", null, description);
+        }
+
+        if (extras.Hidden == true)
+        {
+            xml.WriteAttributeString(null, "hidden", null, "1");
+        }
+
+        if (extras.Title is not null)
+        {
+            xml.WriteAttributeString(null, "title", null, extras.Title);
         }
 
         if (link is not null)
@@ -720,6 +727,11 @@ public static partial class DrawingWriter
             }
 
             xml.WriteEndElement();
+        }
+
+        if (extras.Decorative == true)
+        {
+            WriteDecorative(xml);
         }
 
         xml.WriteEndElement();

@@ -70,7 +70,7 @@ public sealed record ShapeAdjustment(string Name, long Value);
 /// };
 /// </code>
 /// </example>
-public sealed record Shape
+public sealed partial record Shape
 {
     private readonly double? cornerRadius;
     private readonly double rotation;
@@ -253,7 +253,7 @@ public sealed record Shape
 /// button made of an icon and a label, for example. Each item has its place inside the group;
 /// the group is then put on the sheet or the slide, and its items are scaled to fit.
 /// </summary>
-public sealed record ShapeGroup
+public sealed partial record ShapeGroup
 {
     private readonly string? name;
     private readonly string? description;
