@@ -112,9 +112,14 @@ public sealed record Hyperlink
 
     /// <summary>
     /// A link read from a file: the relationship's target as it is, without the checks of
-    /// <see cref="ToUrl(string)"/>, since a file may hold any scheme. Nothing is ever followed.
+    /// <see cref="ToUrl(string)"/>, since a file may hold any scheme (<c>file:</c>, a program's
+    /// path, PowerPoint's <c>ppaction://</c>). Nothing is ever followed. For readers; a link to
+    /// write is made with <see cref="ToUrl(string)"/> or <see cref="ToLocation(string)"/>.
     /// </summary>
-    internal static Hyperlink Read(string? url, string? location)
+    /// <param name="url">The external target, or null.</param>
+    /// <param name="location">The place inside the document, or null.</param>
+    /// <returns>The link.</returns>
+    public static Hyperlink Read(string? url, string? location)
     {
         return new Hyperlink(url, location);
     }

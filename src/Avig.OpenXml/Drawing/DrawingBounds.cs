@@ -90,9 +90,15 @@ public readonly record struct DrawingBounds
 
     /// <summary>
     /// Bounds read from a file, kept as they are: a slide may place a shape partly off its left
-    /// or top edge, which <see cref="FromEmu"/> refuses for what a program writes.
+    /// or top edge, which <see cref="FromEmu"/> refuses for what a program writes. A negative
+    /// size is read as 0. For readers; bounds to write are made with <see cref="FromEmu"/>.
     /// </summary>
-    internal static DrawingBounds Read(long left, long top, long width, long height)
+    /// <param name="left">From the left edge, in EMU; may be negative.</param>
+    /// <param name="top">From the top edge, in EMU; may be negative.</param>
+    /// <param name="width">The width in EMU.</param>
+    /// <param name="height">The height in EMU.</param>
+    /// <returns>The bounds.</returns>
+    public static DrawingBounds Read(long left, long top, long width, long height)
     {
         return new DrawingBounds(left, top, Math.Max(width, 0), Math.Max(height, 0));
     }

@@ -47,15 +47,66 @@ public static class DrawingReader
         return item;
     }
 
+    /// <summary>
+    /// Reads one element of a shape tree as <see cref="ReadAsync"/> does, for a context made with
+    /// images that are already in memory (the constructor that takes a synchronous reader).
+    /// </summary>
+    /// <param name="element">The element.</param>
+    /// <param name="context">The part's relationships and images; made with a synchronous image reader.</param>
+    /// <returns>The item; Invalid when the element is none of the five, or a picture's image cannot be read.</returns>
+    /// <exception cref="InvalidOperationException">The context reads its images asynchronously.</exception>
+    public static Result<ShapeTreeItem> Read(XElement element, DrawingReadContext context)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (context.IsSynchronous == false)
+        {
+            throw new InvalidOperationException("The context reads its images asynchronously; use ReadAsync, or make the context with a synchronous image reader.");
+        }
+
+        if ((element.Name.LocalName is "sp" or "cxnSp" or "pic" or "grpSp" or "graphicFrame") == false)
+        {
+            return Result<ShapeTreeItem>.Invalid($"<{element.Name.LocalName}> is not an element of a shape tree.");
+        }
+
+        Dictionary<string, Picture> images = new(StringComparer.Ordinal);
+        Result loaded = LoadImages(element, context, images);
+
+        if (loaded.IsFailure(out string? error, out ResultStatus status) == true)
+        {
+            return Result<ShapeTreeItem>.Failure(error, status);
+        }
+
+        Reader reader = new(context, images);
+
+        if (reader.TryRead(element, out ShapeTreeItem? item, out string? problem) == false)
+        {
+            return Result<ShapeTreeItem>.Invalid(problem);
+        }
+
+        return item;
+    }
+
     /// <summary>Reads a fill from the element that holds one (spPr, a chart's c:spPr, a run's rPr), when it has one.</summary>
     /// <param name="parent">The element.</param>
     /// <param name="fill">The fill; a picture fill is not read here, since it needs the part's images.</param>
     /// <returns>True when the element has a fill this layer can hold.</returns>
     public static bool TryReadFill(XElement parent, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Fill? fill)
     {
+        return TryReadFill(parent, null, out fill);
+    }
+
+    /// <summary>Reads a fill, with theme colours (a:schemeClr) resolved from <paramref name="schemeColors"/> (see <see cref="DrawingColors"/>).</summary>
+    /// <param name="parent">The element.</param>
+    /// <param name="schemeColors">The theme's colours by name, or null.</param>
+    /// <param name="fill">The fill; a picture fill is not read here, since it needs the part's images.</param>
+    /// <returns>True when the element has a fill this layer can hold.</returns>
+    public static bool TryReadFill(XElement parent, IReadOnlyDictionary<string, string>? schemeColors, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Fill? fill)
+    {
         ArgumentNullException.ThrowIfNull(parent);
 
-        return new Reader(null, []).TryFill(parent, out fill);
+        return new Reader(null, [], schemeColors).TryFill(parent, out fill);
     }
 
     /// <summary>Reads the a:ln of an element, when it has one.</summary>
@@ -64,9 +115,19 @@ public static class DrawingReader
     /// <returns>True when the element has a line this layer can hold.</returns>
     public static bool TryReadOutline(XElement parent, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Outline? outline)
     {
+        return TryReadOutline(parent, null, out outline);
+    }
+
+    /// <summary>Reads the a:ln of an element, with theme colours resolved from <paramref name="schemeColors"/>.</summary>
+    /// <param name="parent">The element that holds the a:ln.</param>
+    /// <param name="schemeColors">The theme's colours by name, or null.</param>
+    /// <param name="outline">The line.</param>
+    /// <returns>True when the element has a line this layer can hold.</returns>
+    public static bool TryReadOutline(XElement parent, IReadOnlyDictionary<string, string>? schemeColors, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Outline? outline)
+    {
         ArgumentNullException.ThrowIfNull(parent);
 
-        return Reader.TryOutline(parent, out outline);
+        return new Reader(null, [], schemeColors).TryOutline(parent, out outline);
     }
 
     /// <summary>Reads a run's look from an a:rPr, a:defRPr or a:endParaRPr.</summary>
@@ -75,9 +136,19 @@ public static class DrawingReader
     /// <returns>True when the element sets anything a <see cref="TextFont"/> holds.</returns>
     public static bool TryReadFont(XElement properties, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TextFont? font)
     {
+        return TryReadFont(properties, null, out font);
+    }
+
+    /// <summary>Reads a run's look, with theme colours resolved from <paramref name="schemeColors"/>.</summary>
+    /// <param name="properties">The element.</param>
+    /// <param name="schemeColors">The theme's colours by name, or null.</param>
+    /// <param name="font">The look.</param>
+    /// <returns>True when the element sets anything a <see cref="TextFont"/> holds.</returns>
+    public static bool TryReadFont(XElement properties, IReadOnlyDictionary<string, string>? schemeColors, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TextFont? font)
+    {
         ArgumentNullException.ThrowIfNull(properties);
 
-        return Reader.TryFont(properties, out font);
+        return new Reader(null, [], schemeColors).TryFont(properties, out font);
     }
 
     /// <summary>Reads the shadows and soft edges of an a:effectLst.</summary>
@@ -87,7 +158,89 @@ public static class DrawingReader
     /// <param name="softEdges">Soft edges in points, or null.</param>
     public static void ReadEffects(XElement? effects, out Shadow? outer, out Shadow? inner, out double? softEdges)
     {
-        Reader.Effects(effects, out outer, out inner, out softEdges);
+        ReadEffects(effects, null, out outer, out inner, out softEdges);
+    }
+
+    /// <summary>Reads the shadows and soft edges of an a:effectLst, with theme colours resolved from <paramref name="schemeColors"/>.</summary>
+    /// <param name="effects">The a:effectLst, or null.</param>
+    /// <param name="schemeColors">The theme's colours by name, or null.</param>
+    /// <param name="outer">The shadow behind, or null.</param>
+    /// <param name="inner">The shadow inside, or null.</param>
+    /// <param name="softEdges">Soft edges in points, or null.</param>
+    public static void ReadEffects(XElement? effects, IReadOnlyDictionary<string, string>? schemeColors, out Shadow? outer, out Shadow? inner, out double? softEdges)
+    {
+        new Reader(null, [], schemeColors).Effects(effects, out outer, out inner, out softEdges);
+    }
+
+    /// <summary>Fetches every image the element refers to, through a context that has them in memory.</summary>
+    private static Result LoadImages(XElement element, DrawingReadContext context, Dictionary<string, Picture> images)
+    {
+        foreach (XElement blip in element.Descendants().Where(child => child.Name.LocalName == "blip"))
+        {
+            if (images.Count >= MaxImages)
+            {
+                return Result.Invalid($"{OpcErrors.DamagedPrefix}: a drawing refers to more than {MaxImages} images.");
+            }
+
+            string? rasterId = Reader.RelationshipId(blip, "embed");
+
+            if (rasterId is null || images.ContainsKey(rasterId) == true)
+            {
+                continue;
+            }
+
+            Result<Picture> raster = ReadPicture(context, rasterId, false, null);
+
+            if (raster.IsFailure(out string? error, out ResultStatus status, out Picture? picture) == true)
+            {
+                return Result.Failure(error, status);
+            }
+
+            images[rasterId] = picture;
+            XElement? svgBlip = blip.Descendants().FirstOrDefault(child => child.Name.LocalName == "svgBlip");
+            string? svgId = null;
+
+            if (svgBlip is not null)
+            {
+                svgId = Reader.RelationshipId(svgBlip, "embed");
+            }
+
+            if (svgId is not null && images.ContainsKey(Reader.SvgKey(rasterId, svgId)) == false)
+            {
+                Result<Picture> svg = ReadPicture(context, svgId, true, picture);
+
+                if (svg.IsFailure(out string? svgError, out ResultStatus svgStatus, out Picture? vector) == true)
+                {
+                    return Result.Failure(svgError, svgStatus);
+                }
+
+                images[Reader.SvgKey(rasterId, svgId)] = vector;
+            }
+        }
+
+        return Result.Success();
+    }
+
+    private static Result<Picture> ReadPicture(DrawingReadContext context, string id, bool svg, Picture? fallback)
+    {
+        if (context.TryGetRelationship(id, out OpcRelationship? relationship) == false || relationship.IsExternal == true)
+        {
+            return Result<Picture>.Invalid($"{OpcErrors.DamagedPrefix}: the picture's relationship {id} is missing or points outside the package.");
+        }
+
+        Result<byte[]> read = context.ReadImage(relationship);
+
+        if (read.IsFailure(out string? error, out ResultStatus status, out byte[]? bytes) == true)
+        {
+            return Result<Picture>.Failure(error, status);
+        }
+
+        if (svg == true)
+        {
+            return Picture.FromSvg(bytes, fallback!);
+        }
+
+        return Picture.FromBytes(bytes);
     }
 
     /// <summary>Fetches every image the element refers to (a:blip and asvg:svgBlip) before it is read.</summary>
@@ -167,11 +320,13 @@ public static class DrawingReader
     {
         private readonly DrawingReadContext? context;
         private readonly Dictionary<string, Picture> images;
+        private readonly IReadOnlyDictionary<string, string>? schemeColors;
 
-        public Reader(DrawingReadContext? context, Dictionary<string, Picture> images)
+        public Reader(DrawingReadContext? context, Dictionary<string, Picture> images, IReadOnlyDictionary<string, string>? schemeColors = null)
         {
             this.context = context;
             this.images = images;
+            this.schemeColors = schemeColors ?? context?.SchemeColors;
         }
 
         public static string SvgKey(string rasterId, string svgId)
@@ -530,7 +685,7 @@ public static class DrawingReader
             return false;
         }
 
-        private static bool TryGradient(XElement element, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Fill? fill)
+        private bool TryGradient(XElement element, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Fill? fill)
         {
             fill = null;
             List<GradientStop> stops = [];
@@ -566,8 +721,13 @@ public static class DrawingReader
         }
 
         /// <summary>An a:srgbClr (or a:sysClr with its last colour) inside the element, with its alpha as a transparency.</summary>
-        public static bool TryColor(XElement? parent, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? color, out double transparency)
+        public bool TryColor(XElement? parent, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? color, out double transparency)
         {
+            if (schemeColors is not null)
+            {
+                return DrawingColors.TryRead(parent, schemeColors, out color, out transparency);
+            }
+
             color = null;
             transparency = 0;
             XElement? element = Child(parent, "srgbClr");
@@ -594,7 +754,7 @@ public static class DrawingReader
             return true;
         }
 
-        public static bool TryOutline(XElement parent, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Outline? outline)
+        public bool TryOutline(XElement parent, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Outline? outline)
         {
             outline = null;
             XElement? line = Child(parent, "ln");
@@ -632,7 +792,7 @@ public static class DrawingReader
             return true;
         }
 
-        public static void Effects(XElement? effects, out Shadow? outer, out Shadow? inner, out double? softEdges)
+        public void Effects(XElement? effects, out Shadow? outer, out Shadow? inner, out double? softEdges)
         {
             outer = null;
             inner = null;
@@ -654,7 +814,7 @@ public static class DrawingReader
             }
         }
 
-        private static bool TryShadow(XElement element, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Shadow? shadow)
+        private bool TryShadow(XElement element, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Shadow? shadow)
         {
             shadow = null;
 
@@ -680,7 +840,7 @@ public static class DrawingReader
         /// in the look of the end of the paragraph before; runs that look the same are joined.
         /// No text at all, and no wrap set, is no text: that is how an empty shape is written.
         /// </summary>
-        private static bool TryText(XElement? body, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out ShapeText? text)
+        private bool TryText(XElement? body, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out ShapeText? text)
         {
             text = null;
 
@@ -801,7 +961,7 @@ public static class DrawingReader
             return points;
         }
 
-        public static bool TryFont(XElement properties, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TextFont? font)
+        public bool TryFont(XElement properties, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TextFont? font)
         {
             font = null;
             string? size = properties.Attribute("sz")?.Value;

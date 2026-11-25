@@ -8,7 +8,8 @@ namespace Avig.OpenXml.Drawing;
 public sealed class DrawingReadContext
 {
     private readonly Dictionary<string, OpcRelationship> relationships = new(StringComparer.Ordinal);
-    private readonly Func<OpcRelationship, CancellationToken, Task<Result<byte[]>>> readImage;
+    private readonly Func<OpcRelationship, CancellationToken, Task<Result<byte[]>>>? readImage;
+    private readonly Func<OpcRelationship, Result<byte[]>>? readImageNow;
 
     /// <summary>Creates a context.</summary>
     /// <param name="relationships">The relationships of the part the drawing is in.</param>
@@ -20,14 +21,34 @@ public sealed class DrawingReadContext
     {
         ArgumentNullException.ThrowIfNull(relationships);
         ArgumentNullException.ThrowIfNull(readImage);
-
-        foreach (OpcRelationship relationship in relationships)
-        {
-            this.relationships.TryAdd(relationship.Id, relationship);
-        }
-
+        Add(relationships);
         this.readImage = readImage;
     }
+
+    /// <summary>
+    /// Creates a context for images already in memory, for <see cref="DrawingReader.Read"/>: a
+    /// package that loaded the part and its images first reads the drawing without I/O.
+    /// </summary>
+    /// <param name="relationships">The relationships of the part the drawing is in.</param>
+    /// <param name="readImage">Gives the bytes of the image a relationship points to; only called for internal relationships.</param>
+    public DrawingReadContext(IReadOnlyList<OpcRelationship> relationships, Func<OpcRelationship, Result<byte[]>> readImage)
+    {
+        ArgumentNullException.ThrowIfNull(relationships);
+        ArgumentNullException.ThrowIfNull(readImage);
+        Add(relationships);
+        readImageNow = readImage;
+    }
+
+    /// <summary>
+    /// The theme's colours by name as <c>#RRGGBB</c> (<c>accent1</c>, <c>tx1</c>, <c>bg1</c> …),
+    /// so that fills, lines, shadows and text in theme colours (a:schemeClr) are read with the
+    /// colour they show (see <see cref="DrawingColors"/>); null, the default, leaves them out as
+    /// before.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? SchemeColors { get; init; }
+
+    /// <summary>True when the context was made with a synchronous image reader, for <see cref="DrawingReader.Read"/>.</summary>
+    public bool IsSynchronous => readImageNow is not null;
 
     internal bool TryGetRelationship(string? id, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out OpcRelationship? relationship)
     {
@@ -38,7 +59,25 @@ public sealed class DrawingReadContext
 
     internal Task<Result<byte[]>> ReadImageAsync(OpcRelationship relationship, CancellationToken cancellationToken)
     {
+        if (readImage is null)
+        {
+            return Task.FromResult(readImageNow!(relationship));
+        }
+
         return readImage(relationship, cancellationToken);
+    }
+
+    internal Result<byte[]> ReadImage(OpcRelationship relationship)
+    {
+        return readImageNow!(relationship);
+    }
+
+    private void Add(IReadOnlyList<OpcRelationship> list)
+    {
+        foreach (OpcRelationship relationship in list)
+        {
+            relationships.TryAdd(relationship.Id, relationship);
+        }
     }
 }
 
