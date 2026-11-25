@@ -16,6 +16,7 @@ public static partial class ChartWriter
     private const string ValueAxisId = "500000002";
     private const string SecondaryCategoryAxisId = "500000003";
     private const string SecondaryValueAxisId = "500000004";
+    private const string SeriesAxisId = "500000005";
 
     /// <summary>A complete chart part, from the XML declaration on. Call <see cref="ChartSpace.Validate"/> first.</summary>
     /// <param name="xml">The writer of the part.</param>
@@ -31,6 +32,12 @@ public static partial class ChartWriter
 
         // Written always: the schema's default (rounded) is the opposite of Excel's.
         WriteValue(xml, "roundedCorners", Flag(chart.RoundedCorners));
+
+        if (chart.Style is int style)
+        {
+            WriteValue(xml, "style", DrawingValues.Text(style));
+        }
+
         xml.WriteStartElement("c", "chart", ChartUri);
 
         if (chart.Title is not null)
@@ -44,6 +51,7 @@ public static partial class ChartWriter
             WriteValue(xml, "autoTitleDeleted", "1");
         }
 
+        WriteView3D(xml, chart);
         xml.WriteStartElement("c", "plotArea", ChartUri);
         xml.WriteElementString("c", "layout", ChartUri, string.Empty);
         List<SeriesGroup> groups = Groups(chart);
@@ -54,6 +62,11 @@ public static partial class ChartWriter
         }
 
         WriteAxes(xml, chart, groups.Exists(group => group.Secondary == true));
+
+        if (chart.DataTable is ChartDataTable table && chart.HasAxes == true)
+        {
+            WriteDataTable(xml, table);
+        }
 
         // Excel paints a plot area without its own fill white, which would hide a background.
         Fill? plotFill = chart.PlotBackground;
@@ -103,6 +116,15 @@ public static partial class ChartWriter
         }
 
         WriteTextProperties(xml, chart.Font);
+
+        if (chart.ExternalData is string externalData)
+        {
+            xml.WriteStartElement("c", "externalData", ChartUri);
+            xml.WriteAttributeString("r", "id", OpcNamespaces.Relationships, externalData);
+            WriteValue(xml, "autoUpdate", "0");
+            xml.WriteEndElement();
+        }
+
         xml.WriteEndElement();
         xml.WriteEndDocument();
     }
@@ -148,39 +170,60 @@ public static partial class ChartWriter
         };
     }
 
+    /// <summary>The grouping a plot is written with: the chart's for its own type, standard (or clustered) for series drawn as another type.</summary>
+    private static ChartGrouping GroupingOf(ChartSpace chart, SeriesGroup group)
+    {
+        if (group.Type == chart.Type)
+        {
+            return chart.Grouping;
+        }
+
+        return ChartGrouping.Default;
+    }
+
+    private static string GroupingName(ChartGrouping grouping, bool bars)
+    {
+        return grouping switch
+        {
+            ChartGrouping.Stacked => "stacked",
+            ChartGrouping.PercentStacked => "percentStacked",
+            ChartGrouping.Depth => "standard",
+            _ when bars == true => "clustered",
+            _ => "standard",
+        };
+    }
+
     private static void WriteGroup(XmlWriter xml, ChartSpace chart, SeriesGroup group)
     {
-        // Stacking applies to the chart's own type; series drawn as another type stand alone.
-        bool stacked = chart.Stacked == true && group.Type == chart.Type;
-        bool pie = group.Type is ChartType.Pie or ChartType.Doughnut;
+        ChartGrouping grouping = GroupingOf(chart, group);
+        bool stacked = grouping is ChartGrouping.Stacked or ChartGrouping.PercentStacked;
+        bool pie = group.Type is ChartType.Pie or ChartType.Doughnut or ChartType.PieOfPie or ChartType.BarOfPie;
+        bool threeD = chart.ThreeD is not null;
         string varyColors = Flag(chart.VaryColors ?? pie);
 
         switch (group.Type)
         {
             case ChartType.Column or ChartType.Bar:
-                xml.WriteStartElement("c", "barChart", ChartUri);
-
-                if (group.Type == ChartType.Bar)
-                {
-                    WriteValue(xml, "barDir", "bar");
-                }
-                else
-                {
-                    WriteValue(xml, "barDir", "col");
-                }
-
-                if (stacked == true)
-                {
-                    WriteValue(xml, "grouping", "stacked");
-                }
-                else
-                {
-                    WriteValue(xml, "grouping", "clustered");
-                }
-
+                xml.WriteStartElement("c", Pick(threeD, "bar3DChart", "barChart"), ChartUri);
+                WriteValue(xml, "barDir", Pick(group.Type == ChartType.Bar, "bar", "col"));
+                WriteValue(xml, "grouping", GroupingName(grouping, true));
                 WriteValue(xml, "varyColors", varyColors);
                 WriteSeries(xml, chart, group);
                 WriteValue(xml, "gapWidth", DrawingValues.Text(chart.GapWidth ?? 150));
+
+                if (threeD == true)
+                {
+                    if (grouping == ChartGrouping.Depth)
+                    {
+                        WriteGapDepth(xml, chart);
+                    }
+
+                    WriteValue(xml, "shape", BarShapeName(chart.BarShape));
+                    WriteAxisIds(xml, false, grouping == ChartGrouping.Depth);
+                    xml.WriteEndElement();
+
+                    break;
+                }
 
                 if (chart.Overlap is int overlap)
                 {
@@ -191,28 +234,78 @@ public static partial class ChartWriter
                     WriteValue(xml, "overlap", "100");
                 }
 
+                if (stacked == true && chart.SeriesLines == true)
+                {
+                    xml.WriteElementString("c", "serLines", ChartUri, string.Empty);
+                }
+
                 WriteAxisIds(xml, group.Secondary);
+                xml.WriteEndElement();
+
+                break;
+
+            case ChartType.Line when threeD == true:
+                xml.WriteStartElement("c", "line3DChart", ChartUri);
+                WriteValue(xml, "grouping", "standard");
+                WriteValue(xml, "varyColors", varyColors);
+                WriteSeries(xml, chart, group);
+                WriteLines(xml, chart, group);
+                WriteGapDepth(xml, chart);
+                WriteAxisIds(xml, false, true);
                 xml.WriteEndElement();
 
                 break;
 
             case ChartType.Line:
                 xml.WriteStartElement("c", "lineChart", ChartUri);
-                WriteValue(xml, "grouping", Grouping(stacked));
+                WriteValue(xml, "grouping", GroupingName(grouping, false));
                 WriteValue(xml, "varyColors", varyColors);
                 WriteSeries(xml, chart, group);
+                WriteLines(xml, chart, group);
                 WriteValue(xml, "marker", "1");
                 WriteAxisIds(xml, group.Secondary);
                 xml.WriteEndElement();
 
                 break;
 
+            case ChartType.Stock:
+                xml.WriteStartElement("c", "stockChart", ChartUri);
+                WriteSeries(xml, chart, group);
+                WriteLines(xml, chart, group);
+                WriteAxisIds(xml, group.Secondary);
+                xml.WriteEndElement();
+
+                break;
+
             case ChartType.Area:
-                xml.WriteStartElement("c", "areaChart", ChartUri);
-                WriteValue(xml, "grouping", Grouping(stacked));
+                xml.WriteStartElement("c", Pick(threeD, "area3DChart", "areaChart"), ChartUri);
+                WriteValue(xml, "grouping", GroupingName(grouping, false));
                 WriteValue(xml, "varyColors", varyColors);
                 WriteSeries(xml, chart, group);
-                WriteAxisIds(xml, group.Secondary);
+
+                if (chart.DropLines == true)
+                {
+                    xml.WriteElementString("c", "dropLines", ChartUri, string.Empty);
+                }
+
+                if (threeD == true)
+                {
+                    WriteGapDepth(xml, chart);
+                    WriteAxisIds(xml, false, grouping == ChartGrouping.Depth);
+                }
+                else
+                {
+                    WriteAxisIds(xml, group.Secondary);
+                }
+
+                xml.WriteEndElement();
+
+                break;
+
+            case ChartType.Pie when threeD == true:
+                xml.WriteStartElement("c", "pie3DChart", ChartUri);
+                WriteValue(xml, "varyColors", varyColors);
+                WriteSeries(xml, chart, group);
                 xml.WriteEndElement();
 
                 break;
@@ -236,9 +329,68 @@ public static partial class ChartWriter
 
                 break;
 
+            case ChartType.PieOfPie or ChartType.BarOfPie:
+                xml.WriteStartElement("c", "ofPieChart", ChartUri);
+                WriteValue(xml, "ofPieType", Pick(group.Type == ChartType.BarOfPie, "bar", "pie"));
+                WriteValue(xml, "varyColors", varyColors);
+                WriteSeries(xml, chart, group);
+                WriteValue(xml, "gapWidth", DrawingValues.Text(chart.GapWidth ?? 100));
+
+                if (chart.Split != ChartSplit.Auto)
+                {
+                    WriteValue(xml, "splitType", SplitName(chart.Split));
+                }
+
+                if (chart.SplitValue is double split)
+                {
+                    WriteValue(xml, "splitPos", DrawingValues.Text(split));
+                }
+
+                WriteValue(xml, "secondPieSize", DrawingValues.Text(chart.SecondPlotSize ?? 75));
+
+                if ((chart.SeriesLines ?? true) == true)
+                {
+                    xml.WriteElementString("c", "serLines", ChartUri, string.Empty);
+                }
+
+                xml.WriteEndElement();
+
+                break;
+
+            case ChartType.Radar:
+                xml.WriteStartElement("c", "radarChart", ChartUri);
+                WriteValue(xml, "radarStyle", Pick(chart.RadarStyle == RadarStyle.Filled, "filled", "marker"));
+                WriteValue(xml, "varyColors", varyColors);
+                WriteSeries(xml, chart, group);
+                WriteAxisIds(xml, group.Secondary);
+                xml.WriteEndElement();
+
+                break;
+
+            case ChartType.Bubble:
+                xml.WriteStartElement("c", "bubbleChart", ChartUri);
+                WriteValue(xml, "varyColors", varyColors);
+                WriteSeries(xml, chart, group);
+                WriteValue(xml, "bubbleScale", DrawingValues.Text(chart.BubbleScale ?? 100));
+                WriteValue(xml, "showNegBubbles", Flag(chart.ShowNegativeBubbles));
+                WriteAxisIds(xml, group.Secondary);
+                xml.WriteEndElement();
+
+                break;
+
+            case ChartType.Surface:
+                xml.WriteStartElement("c", Pick(threeD, "surface3DChart", "surfaceChart"), ChartUri);
+                WriteValue(xml, "wireframe", Flag(chart.Wireframe));
+                WriteSeries(xml, chart, group);
+                WriteAxisIds(xml, false, true);
+                xml.WriteEndElement();
+
+                break;
+
             default:
+                // Smooth when every series is: the application reads the chart's type from the style.
                 xml.WriteStartElement("c", "scatterChart", ChartUri);
-                WriteValue(xml, "scatterStyle", "lineMarker");
+                WriteValue(xml, "scatterStyle", Pick(group.Members.Count > 0 && group.Members.TrueForAll(member => member.Series.Smooth == true), "smoothMarker", "lineMarker"));
                 WriteValue(xml, "varyColors", varyColors);
                 WriteSeries(xml, chart, group);
                 WriteAxisIds(xml, group.Secondary);
@@ -248,23 +400,134 @@ public static partial class ChartWriter
         }
     }
 
-    private static string Grouping(bool stacked)
+    private static string Pick(bool condition, string whenTrue, string whenFalse)
     {
-        if (stacked == true)
+        if (condition == true)
         {
-            return "stacked";
+            return whenTrue;
         }
 
-        return "standard";
+        return whenFalse;
+    }
+
+    /// <summary>The drop lines, high-low lines and up-down bars of a line or stock plot, in the schema's order.</summary>
+    private static void WriteLines(XmlWriter xml, ChartSpace chart, SeriesGroup group)
+    {
+        bool stock = group.Type == ChartType.Stock;
+
+        if (chart.DropLines == true)
+        {
+            xml.WriteElementString("c", "dropLines", ChartUri, string.Empty);
+        }
+
+        if (chart.ThreeD is not null)
+        {
+            return;
+        }
+
+        if ((chart.HighLowLines ?? stock) == true)
+        {
+            xml.WriteElementString("c", "hiLowLines", ChartUri, string.Empty);
+        }
+
+        if ((chart.UpDownBars ?? (stock == true && group.Members.Count == 4)) == true)
+        {
+            xml.WriteStartElement("c", "upDownBars", ChartUri);
+            WriteValue(xml, "gapWidth", "150");
+            xml.WriteElementString("c", "upBars", ChartUri, string.Empty);
+            xml.WriteElementString("c", "downBars", ChartUri, string.Empty);
+            xml.WriteEndElement();
+        }
+    }
+
+    private static void WriteGapDepth(XmlWriter xml, ChartSpace chart)
+    {
+        if (chart.ThreeD is ChartView3D view && view.GapDepth != 150)
+        {
+            WriteValue(xml, "gapDepth", DrawingValues.Text(view.GapDepth));
+        }
+    }
+
+    /// <summary>The c:view3D of a 3-D chart, and of a contour (a surface seen from straight above).</summary>
+    private static void WriteView3D(XmlWriter xml, ChartSpace chart)
+    {
+        ChartView3D? view = chart.ThreeD;
+
+        if (view is null && chart.Type == ChartType.Surface)
+        {
+            view = new ChartView3D { RotationX = 90, RotationY = 0, RightAngleAxes = false, Perspective = 0 };
+        }
+
+        if (view is null)
+        {
+            return;
+        }
+
+        xml.WriteStartElement("c", "view3D", ChartUri);
+        WriteValue(xml, "rotX", DrawingValues.Text(view.RotationX));
+        WriteValue(xml, "rotY", DrawingValues.Text(view.RotationY));
+
+        if (view.DepthPercent != 100)
+        {
+            WriteValue(xml, "depthPercent", DrawingValues.Text(view.DepthPercent));
+        }
+
+        WriteValue(xml, "rAngAx", Flag(view.RightAngleAxes));
+
+        if (view.RightAngleAxes == false)
+        {
+            WriteValue(xml, "perspective", DrawingValues.Text(view.Perspective));
+        }
+
+        xml.WriteEndElement();
+    }
+
+    private static void WriteDataTable(XmlWriter xml, ChartDataTable table)
+    {
+        xml.WriteStartElement("c", "dTable", ChartUri);
+        WriteValue(xml, "showHorzBorder", Flag(table.HorizontalBorders));
+        WriteValue(xml, "showVertBorder", Flag(table.VerticalBorders));
+        WriteValue(xml, "showOutline", Flag(table.Outline));
+        WriteValue(xml, "showKeys", Flag(table.ShowLegendKeys));
+        xml.WriteEndElement();
+    }
+
+    private static string BarShapeName(BarShape shape)
+    {
+        return shape switch
+        {
+            BarShape.Cylinder => "cylinder",
+            BarShape.Cone => "cone",
+            BarShape.ConeToMax => "coneToMax",
+            BarShape.Pyramid => "pyramid",
+            BarShape.PyramidToMax => "pyramidToMax",
+            _ => "box",
+        };
+    }
+
+    private static string SplitName(ChartSplit split)
+    {
+        return split switch
+        {
+            ChartSplit.Position => "pos",
+            ChartSplit.Value => "val",
+            ChartSplit.Percent => "percent",
+            _ => "auto",
+        };
     }
 
     /// <summary>The series, each with its children in the order its type's schema gives.</summary>
     private static void WriteSeries(XmlWriter xml, ChartSpace chart, SeriesGroup group)
     {
         ChartType type = group.Type;
-        bool pie = type is ChartType.Pie or ChartType.Doughnut;
-        bool lines = type is ChartType.Line or ChartType.Scatter;
-        bool bars = type is ChartType.Column or ChartType.Bar;
+        bool threeD = chart.ThreeD is not null;
+        bool pie = type is ChartType.Pie or ChartType.Doughnut or ChartType.PieOfPie or ChartType.BarOfPie;
+        bool lines = type is ChartType.Line or ChartType.Scatter or ChartType.Stock;
+        bool markers = lines == true || (type == ChartType.Radar && chart.RadarStyle == RadarStyle.Marker);
+        bool bars = type is ChartType.Column or ChartType.Bar or ChartType.Bubble;
+        bool xy = type is ChartType.Scatter or ChartType.Bubble;
+        bool extras = threeD == false && type is ChartType.Column or ChartType.Bar or ChartType.Line or ChartType.Area or ChartType.Scatter or ChartType.Bubble;
+        bool points = type != ChartType.Surface;
 
         foreach ((int index, ChartSpaceSeries series) in group.Members)
         {
@@ -302,11 +565,11 @@ public static partial class ChartWriter
                 color = null;
             }
 
-            WriteSeriesShape(xml, type, series, color);
+            WriteSeriesShape(xml, chart, type, series, color);
 
-            if (lines == true)
+            if (markers == true)
             {
-                WriteMarker(xml, series, color ?? series.Outline?.Color);
+                WriteMarker(xml, series, color ?? series.Outline?.Color, type == ChartType.Stock);
             }
 
             if (bars == true)
@@ -314,20 +577,38 @@ public static partial class ChartWriter
                 WriteValue(xml, "invertIfNegative", "0");
             }
 
-            for (int point = 0; point < series.PointColors.Count; point++)
+            if (pie == true && series.Explosion is int explosion)
+            {
+                WriteValue(xml, "explosion", DrawingValues.Text(explosion));
+            }
+
+            for (int point = 0; point < series.PointColors.Count && points == true; point++)
             {
                 if (series.PointColors[point] is string pointColor)
                 {
-                    WritePoint(xml, type, point, pointColor, series);
+                    WritePoint(xml, chart, type, point, pointColor, series);
                 }
             }
 
-            if ((series.DataLabels ?? chart.DataLabels) is DataLabels labels)
+            if ((series.DataLabels ?? chart.DataLabels) is DataLabels labels && points == true)
             {
                 WriteDataLabels(xml, labels);
             }
 
-            if (type == ChartType.Scatter)
+            if (extras == true)
+            {
+                foreach (Trendline trendline in series.Trendlines)
+                {
+                    WriteTrendline(xml, trendline);
+                }
+
+                foreach (ErrorBars errorBars in series.ErrorBars.OrderBy(item => item.Direction == ErrorBarDirection.Y))
+                {
+                    WriteErrorBars(xml, errorBars, xy);
+                }
+            }
+
+            if (xy == true)
             {
                 if (series.Categories is not null)
                 {
@@ -346,6 +627,16 @@ public static partial class ChartWriter
                 WriteReference(xml, "val", true, series.Values);
             }
 
+            if (type == ChartType.Bubble)
+            {
+                if (series.BubbleSizes is not null)
+                {
+                    WriteReference(xml, "bubbleSize", true, series.BubbleSizes);
+                }
+
+                WriteValue(xml, "bubble3D", Flag(chart.Bubble3D));
+            }
+
             if (lines == true)
             {
                 WriteValue(xml, "smooth", Flag(series.Smooth));
@@ -355,21 +646,28 @@ public static partial class ChartWriter
         }
     }
 
+    /// <summary>True for the types whose series are drawn as lines rather than filled: line, scatter, stock and radar with markers.</summary>
+    private static bool IsLineType(ChartSpace chart, ChartType type)
+    {
+        return type is ChartType.Line or ChartType.Scatter or ChartType.Stock || (type == ChartType.Radar && chart.RadarStyle == RadarStyle.Marker);
+    }
+
     /// <summary>The series' c:spPr: the fill, line and shadow its type uses, when any is set.</summary>
-    private static void WriteSeriesShape(XmlWriter xml, ChartType type, ChartSpaceSeries series, string? color)
+    private static void WriteSeriesShape(XmlWriter xml, ChartSpace chart, ChartType type, ChartSpaceSeries series, string? color)
     {
         Fill? fill = null;
         Outline? outline = series.Outline;
+        bool pointsAlone = type == ChartType.Stock || (type == ChartType.Scatter && chart.ScatterLines == false);
 
-        if (type is ChartType.Line or ChartType.Scatter)
+        if (IsLineType(chart, type) == true)
         {
             if (outline is null && color is not null)
             {
                 outline = new Outline(color, 2.25);
             }
 
-            // A plain scatter chart shows points without lines between them, unless asked.
-            if (type == ChartType.Scatter && series.Outline is null && series.Smooth == false)
+            // A plain scatter chart (and a stock chart) shows points without lines between them, unless asked.
+            if (pointsAlone == true && series.Outline is null && series.Smooth == false)
             {
                 outline = Outline.None;
             }
@@ -384,7 +682,10 @@ public static partial class ChartWriter
             }
         }
 
-        if (fill is null && outline is null && series.Shadow is null)
+        // Lines in the application's colour: a line without a fill of its own.
+        bool automaticLine = type == ChartType.Scatter && chart.ScatterLines == true && outline is null;
+
+        if (fill is null && outline is null && series.Shadow is null && automaticLine == false)
         {
             return;
         }
@@ -396,9 +697,17 @@ public static partial class ChartWriter
             DrawingWriter.WriteFill(xml, fill);
         }
 
+        if (automaticLine == true)
+        {
+            xml.WriteStartElement("a", "ln", DrawingUri);
+            xml.WriteAttributeString(null, "w", null, "28575");
+            xml.WriteAttributeString(null, "cap", null, "rnd");
+            xml.WriteEndElement();
+        }
+
         if (outline is not null)
         {
-            if (type == ChartType.Scatter && outline.Color is null)
+            if (pointsAlone == true && outline.Color is null)
             {
                 // As Excel writes a scatter series without lines.
                 xml.WriteStartElement("a", "ln", DrawingUri);
@@ -420,15 +729,22 @@ public static partial class ChartWriter
         xml.WriteEndElement();
     }
 
-    private static void WriteMarker(XmlWriter xml, ChartSpaceSeries series, string? color)
+    private static void WriteMarker(XmlWriter xml, ChartSpaceSeries series, string? color, bool stock)
     {
-        if (series.Marker is null && series.MarkerSize is null && color is null)
+        if (series.Marker is null && series.MarkerSize is null && color is null && stock == false)
         {
             return;
         }
 
         xml.WriteStartElement("c", "marker", ChartUri);
         MarkerStyle style = series.Marker ?? MarkerStyle.Circle;
+
+        // A stock chart's points are not marked unless asked: the high-low lines show them.
+        if (stock == true && series.Marker is null)
+        {
+            style = MarkerStyle.None;
+        }
+
         WriteValue(xml, "symbol", MarkerName(style));
 
         if (style != MarkerStyle.None)
@@ -465,12 +781,12 @@ public static partial class ChartWriter
     }
 
     /// <summary>A c:dPt that gives one point its own colour.</summary>
-    private static void WritePoint(XmlWriter xml, ChartType type, int point, string color, ChartSpaceSeries series)
+    private static void WritePoint(XmlWriter xml, ChartSpace chart, ChartType type, int point, string color, ChartSpaceSeries series)
     {
         xml.WriteStartElement("c", "dPt", ChartUri);
         WriteValue(xml, "idx", DrawingValues.Text(point));
 
-        if (type is ChartType.Column or ChartType.Bar)
+        if (type is ChartType.Column or ChartType.Bar or ChartType.Bubble)
         {
             WriteValue(xml, "invertIfNegative", "0");
         }
@@ -478,7 +794,7 @@ public static partial class ChartWriter
         WriteValue(xml, "bubble3D", "0");
         xml.WriteStartElement("c", "spPr", ChartUri);
 
-        if (type is ChartType.Line or ChartType.Scatter)
+        if (IsLineType(chart, type) == true)
         {
             double width = series.Outline?.Width ?? 2.25;
             DrawingWriter.WriteOutline(xml, new Outline(color, width));
@@ -499,6 +815,111 @@ public static partial class ChartWriter
         }
 
         xml.WriteEndElement();
+        xml.WriteEndElement();
+    }
+
+    private static void WriteTrendline(XmlWriter xml, Trendline trendline)
+    {
+        xml.WriteStartElement("c", "trendline", ChartUri);
+
+        if (trendline.Name is not null)
+        {
+            xml.WriteElementString("c", "name", ChartUri, trendline.Name);
+        }
+
+        if (trendline.Outline is not null)
+        {
+            xml.WriteStartElement("c", "spPr", ChartUri);
+            DrawingWriter.WriteOutline(xml, trendline.Outline);
+            xml.WriteEndElement();
+        }
+
+        WriteValue(xml, "trendlineType", TrendlineName(trendline.Kind));
+
+        if (trendline.Kind == TrendlineKind.Polynomial)
+        {
+            WriteValue(xml, "order", DrawingValues.Text(trendline.Order));
+        }
+
+        if (trendline.Kind == TrendlineKind.MovingAverage)
+        {
+            WriteValue(xml, "period", DrawingValues.Text(trendline.Period));
+        }
+
+        if (trendline.Forward > 0)
+        {
+            WriteValue(xml, "forward", DrawingValues.Text(trendline.Forward));
+        }
+
+        if (trendline.Backward > 0)
+        {
+            WriteValue(xml, "backward", DrawingValues.Text(trendline.Backward));
+        }
+
+        if (trendline.Intercept is double intercept)
+        {
+            WriteValue(xml, "intercept", DrawingValues.Text(intercept));
+        }
+
+        WriteValue(xml, "dispRSqr", Flag(trendline.DisplayRSquared));
+        WriteValue(xml, "dispEq", Flag(trendline.DisplayEquation));
+        xml.WriteEndElement();
+    }
+
+    private static string TrendlineName(TrendlineKind kind)
+    {
+        return kind switch
+        {
+            TrendlineKind.Exponential => "exp",
+            TrendlineKind.Logarithmic => "log",
+            TrendlineKind.MovingAverage => "movingAvg",
+            TrendlineKind.Polynomial => "poly",
+            TrendlineKind.Power => "power",
+            _ => "linear",
+        };
+    }
+
+    private static void WriteErrorBars(XmlWriter xml, ErrorBars bars, bool xy)
+    {
+        xml.WriteStartElement("c", "errBars", ChartUri);
+
+        // The direction is only written where there are two.
+        if (xy == true)
+        {
+            WriteValue(xml, "errDir", Pick(bars.Direction == ErrorBarDirection.X, "x", "y"));
+        }
+
+        string side = bars.Side switch
+        {
+            ErrorBarSide.Plus => "plus",
+            ErrorBarSide.Minus => "minus",
+            _ => "both",
+        };
+
+        string amount = bars.Amount switch
+        {
+            ErrorBarAmount.Percentage => "percentage",
+            ErrorBarAmount.StandardDeviation => "stdDev",
+            ErrorBarAmount.StandardError => "stdErr",
+            _ => "fixedVal",
+        };
+
+        WriteValue(xml, "errBarType", side);
+        WriteValue(xml, "errValType", amount);
+        WriteValue(xml, "noEndCap", Flag(bars.NoEndCap));
+
+        if (bars.Amount != ErrorBarAmount.StandardError)
+        {
+            WriteValue(xml, "val", DrawingValues.Text(bars.Value));
+        }
+
+        if (bars.Outline is not null)
+        {
+            xml.WriteStartElement("c", "spPr", ChartUri);
+            DrawingWriter.WriteOutline(xml, bars.Outline);
+            xml.WriteEndElement();
+        }
+
         xml.WriteEndElement();
     }
 
@@ -553,9 +974,16 @@ public static partial class ChartWriter
         };
     }
 
+    /// <summary>True when the chart has a depth axis (c:serAx): a surface, a 3-D line chart, and a 3-D chart with its series in depth.</summary>
+    internal static bool HasSeriesAxis(ChartSpace chart)
+    {
+        return chart.Type == ChartType.Surface
+            || (chart.ThreeD is not null && (chart.Type == ChartType.Line || (chart.Grouping == ChartGrouping.Depth && chart.Type is ChartType.Column or ChartType.Bar or ChartType.Area)));
+    }
+
     private static void WriteAxes(XmlWriter xml, ChartSpace chart, bool secondary)
     {
-        if (chart.Type is ChartType.Pie or ChartType.Doughnut)
+        if (chart.HasAxes == false)
         {
             return;
         }
@@ -571,7 +999,7 @@ public static partial class ChartWriter
             valuePosition = "b";
         }
 
-        if (chart.Type == ChartType.Scatter)
+        if (chart.Type is ChartType.Scatter or ChartType.Bubble)
         {
             // Two value axes: x along the bottom, y up the side.
             WriteValueAxis(xml, new AxisPlace(CategoryAxisId, ValueAxisId, "b", "midCat", false), chart.CategoryAxisTitle, categoryAxis, false);
@@ -580,8 +1008,9 @@ public static partial class ChartWriter
             return;
         }
 
+        string crossBetween = Pick(chart.Type == ChartType.Surface, "midCat", "between");
         WriteCategoryAxis(xml, CategoryAxisId, ValueAxisId, categoryPosition, chart.CategoryAxisTitle, categoryAxis);
-        WriteValueAxis(xml, new AxisPlace(ValueAxisId, CategoryAxisId, valuePosition, "between", false), chart.ValueAxisTitle, valueAxis, true);
+        WriteValueAxis(xml, new AxisPlace(ValueAxisId, CategoryAxisId, valuePosition, crossBetween, false), chart.ValueAxisTitle, valueAxis, true);
 
         if (secondary == true)
         {
@@ -589,6 +1018,11 @@ public static partial class ChartWriter
             // their value axis sits on the right, crossing at the far end.
             WriteCategoryAxis(xml, SecondaryCategoryAxisId, SecondaryValueAxisId, "b", null, new ChartAxis { Visible = false });
             WriteValueAxis(xml, new AxisPlace(SecondaryValueAxisId, SecondaryCategoryAxisId, "r", "between", true), null, chart.SecondaryValueAxis ?? new ChartAxis(), false);
+        }
+
+        if (HasSeriesAxis(chart) == true)
+        {
+            WriteSeriesAxis(xml, chart.SeriesAxis ?? new ChartAxis());
         }
     }
 
@@ -622,6 +1056,25 @@ public static partial class ChartWriter
         WriteValue(xml, "lblAlgn", "ctr");
         WriteValue(xml, "lblOffset", "100");
         WriteValue(xml, "noMultiLvlLbl", "0");
+        xml.WriteEndElement();
+    }
+
+    /// <summary>The depth axis of a 3-D chart, along the series.</summary>
+    private static void WriteSeriesAxis(XmlWriter xml, ChartAxis axis)
+    {
+        xml.WriteStartElement("c", "serAx", ChartUri);
+        WriteValue(xml, "axId", SeriesAxisId);
+        WriteScaling(xml, axis, false);
+        WriteValue(xml, "delete", Flag(axis.Visible == false));
+        WriteValue(xml, "axPos", "b");
+        WriteGridlines(xml, axis, false);
+        WriteValue(xml, "majorTickMark", "out");
+        WriteValue(xml, "minorTickMark", "none");
+        WriteValue(xml, "tickLblPos", "nextTo");
+        WriteAxisShape(xml, axis);
+        WriteTextProperties(xml, axis.Font);
+        WriteValue(xml, "crossAx", ValueAxisId);
+        WriteValue(xml, "crosses", "autoZero");
         xml.WriteEndElement();
     }
 
@@ -666,13 +1119,24 @@ public static partial class ChartWriter
             WriteValue(xml, "majorUnit", DrawingValues.Text(unit));
         }
 
+        if (axis.MinorUnit is double minor)
+        {
+            WriteValue(xml, "minorUnit", DrawingValues.Text(minor));
+        }
+
         xml.WriteEndElement();
     }
 
     private static void WriteScaling(XmlWriter xml, ChartAxis axis, bool values)
     {
         xml.WriteStartElement("c", "scaling", ChartUri);
-        WriteValue(xml, "orientation", "minMax");
+
+        if (values == true && axis.LogBase is double logBase)
+        {
+            WriteValue(xml, "logBase", DrawingValues.Text(logBase));
+        }
+
+        WriteValue(xml, "orientation", Pick(axis.Reversed, "maxMin", "minMax"));
 
         if (values == true && axis.Maximum is double maximum)
         {
@@ -689,21 +1153,33 @@ public static partial class ChartWriter
 
     private static void WriteGridlines(XmlWriter xml, ChartAxis axis, bool byDefault)
     {
-        if ((axis.Gridlines ?? byDefault) == false)
+        if ((axis.Gridlines ?? byDefault) == true)
         {
-            return;
-        }
+            xml.WriteStartElement("c", "majorGridlines", ChartUri);
 
-        xml.WriteStartElement("c", "majorGridlines", ChartUri);
+            if (axis.GridlineOutline is not null)
+            {
+                xml.WriteStartElement("c", "spPr", ChartUri);
+                DrawingWriter.WriteOutline(xml, axis.GridlineOutline);
+                xml.WriteEndElement();
+            }
 
-        if (axis.GridlineOutline is not null)
-        {
-            xml.WriteStartElement("c", "spPr", ChartUri);
-            DrawingWriter.WriteOutline(xml, axis.GridlineOutline);
             xml.WriteEndElement();
         }
 
-        xml.WriteEndElement();
+        if (axis.MinorGridlines == true)
+        {
+            xml.WriteStartElement("c", "minorGridlines", ChartUri);
+
+            if (axis.MinorGridlineOutline is not null)
+            {
+                xml.WriteStartElement("c", "spPr", ChartUri);
+                DrawingWriter.WriteOutline(xml, axis.MinorGridlineOutline);
+                xml.WriteEndElement();
+            }
+
+            xml.WriteEndElement();
+        }
     }
 
     private static void WriteAxisShape(XmlWriter xml, ChartAxis axis)
@@ -738,6 +1214,13 @@ public static partial class ChartWriter
 
         WriteValue(xml, "axId", CategoryAxisId);
         WriteValue(xml, "axId", ValueAxisId);
+    }
+
+    /// <summary>The three axis ids of a 3-D plot: the depth axis', or 0 when its series stand side by side, as PowerPoint writes them.</summary>
+    private static void WriteAxisIds(XmlWriter xml, bool secondary, bool depth)
+    {
+        WriteAxisIds(xml, secondary);
+        WriteValue(xml, "axId", Pick(depth, SeriesAxisId, "0"));
     }
 
     /// <summary>A title with one run of text. <paramref name="vertical"/> turns it to read upwards, as Excel does beside a vertical axis.</summary>

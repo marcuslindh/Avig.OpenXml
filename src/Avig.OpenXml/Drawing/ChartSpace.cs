@@ -132,7 +132,7 @@ public sealed record ChartData
 }
 
 /// <summary>One series of a <see cref="ChartSpace"/>: its data, its type and how it looks.</summary>
-public sealed record ChartSpaceSeries
+public sealed partial record ChartSpaceSeries
 {
     private readonly string? name;
     private readonly string? color;
@@ -295,7 +295,7 @@ public sealed record ChartSpaceSeries
 /// Where it is placed and what its formulas point to is up to the package that owns it; Avig.Kalkyl's
 /// <c>Chart</c> builds one over cells in the workbook.
 /// </summary>
-public sealed record ChartSpace
+public sealed partial record ChartSpace
 {
     private readonly IReadOnlyList<ChartSpaceSeries> series = [];
     private readonly string? title;
@@ -303,6 +303,7 @@ public sealed record ChartSpace
     private int firstSliceAngle;
     private int? gapWidth;
     private int? overlap;
+    private ChartGrouping grouping;
 
     /// <summary>Creates a chart.</summary>
     /// <param name="type">The kind of chart.</param>
@@ -366,9 +367,24 @@ public sealed record ChartSpace
 
     /// <summary>
     /// Stack the series on top of each other instead of side by side. For column, bar, line and
-    /// area charts.
+    /// area charts. The same as <see cref="Grouping"/> <see cref="ChartGrouping.Stacked"/>; true
+    /// also for <see cref="ChartGrouping.PercentStacked"/>.
     /// </summary>
-    public bool Stacked { get; init; }
+    public bool Stacked
+    {
+        get => grouping is ChartGrouping.Stacked or ChartGrouping.PercentStacked;
+        init
+        {
+            if (value == true && grouping != ChartGrouping.PercentStacked)
+            {
+                grouping = ChartGrouping.Stacked;
+            }
+            else if (value == false && grouping is ChartGrouping.Stacked or ChartGrouping.PercentStacked)
+            {
+                grouping = ChartGrouping.Default;
+            }
+        }
+    }
 
     /// <summary>The title under the category axis (the x axis of a scatter chart), or null.</summary>
     public string? CategoryAxisTitle { get; init; }
@@ -509,15 +525,26 @@ public sealed record ChartSpace
             }
         }
 
+        ValidateKinds();
         bool mixed = Series.Any(item => TypeOf(item) != Type || item.SecondaryAxis == true);
 
         if (mixed == true)
         {
+            bool stock = Series.Any(item => TypeOf(item) == ChartType.Stock);
+
             foreach (ChartSpaceSeries item in Series)
             {
-                if ((TypeOf(item) is ChartType.Column or ChartType.Line or ChartType.Area) == false)
+                // A stock chart takes the volume as columns: the volume-high-low-close charts.
+                bool allowed = TypeOf(item) is ChartType.Column or ChartType.Line or ChartType.Area;
+
+                if (stock == true)
                 {
-                    throw new ArgumentException($"A combination chart mixes column, line and area series; {TypeOf(item)} cannot be one of them.", nameof(Series));
+                    allowed = TypeOf(item) is ChartType.Column or ChartType.Stock;
+                }
+
+                if (allowed == false)
+                {
+                    throw new ArgumentException($"A combination chart mixes column, line and area series (or a stock chart with columns for the volume); {TypeOf(item)} cannot be one of them.", nameof(Series));
                 }
             }
 
@@ -540,10 +567,11 @@ public sealed record ChartSpace
             bool stacked = Stacked == true && type == Type;
             bool allowed = type switch
             {
+                _ when ThreeD is not null => false,
                 ChartType.Column or ChartType.Bar => labels.Position is DataLabelPosition.Center or DataLabelPosition.InsideEnd or DataLabelPosition.InsideBase
                     || (labels.Position == DataLabelPosition.OutsideEnd && stacked == false),
-                ChartType.Line or ChartType.Scatter => labels.Position is DataLabelPosition.Center or DataLabelPosition.Above or DataLabelPosition.Below or DataLabelPosition.Left or DataLabelPosition.Right,
-                ChartType.Pie => labels.Position is DataLabelPosition.Center or DataLabelPosition.InsideEnd or DataLabelPosition.OutsideEnd or DataLabelPosition.BestFit,
+                ChartType.Line or ChartType.Scatter or ChartType.Bubble or ChartType.Stock => labels.Position is DataLabelPosition.Center or DataLabelPosition.Above or DataLabelPosition.Below or DataLabelPosition.Left or DataLabelPosition.Right,
+                ChartType.Pie or ChartType.PieOfPie or ChartType.BarOfPie => labels.Position is DataLabelPosition.Center or DataLabelPosition.InsideEnd or DataLabelPosition.OutsideEnd or DataLabelPosition.BestFit,
                 _ => false,
             };
 

@@ -23,6 +23,24 @@ public enum ChartType
 
     /// <summary>Points at x and y; the series' categories are the x values and must be numbers.</summary>
     Scatter,
+
+    /// <summary>Lines (or filled areas, <see cref="ChartSpace.RadarStyle"/>) around a centre, one spoke per category.</summary>
+    Radar,
+
+    /// <summary>Points at x and y sized by a third value (<see cref="ChartSpaceSeries.BubbleSizes"/>); the categories are the x values.</summary>
+    Bubble,
+
+    /// <summary>High, low and close (or open, high, low and close) as three or four series: lines between high and low, bars between open and close.</summary>
+    Stock,
+
+    /// <summary>A surface over categories and series: 3-D with <see cref="ChartSpace.ThreeD"/>, a contour seen from above without.</summary>
+    Surface,
+
+    /// <summary>A pie whose last slices are taken out into a second, smaller pie.</summary>
+    PieOfPie,
+
+    /// <summary>A pie whose last slices are taken out into a stacked bar.</summary>
+    BarOfPie,
 }
 
 /// <summary>Where the legend goes.</summary>
@@ -158,7 +176,7 @@ public sealed record DataLabels
 }
 
 /// <summary>How an axis of a chart looks: shown or hidden, gridlines, its range, font and number format.</summary>
-public sealed record ChartAxis
+public sealed partial record ChartAxis
 {
     private readonly double? minimum;
     private readonly double? maximum;
