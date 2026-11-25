@@ -22,7 +22,7 @@
     <!-- 0.x until Avig.Kalkyl 1.0.0, which is released the same day as 1.0.0 of this package. -->
     <IsPackable>true</IsPackable>
     <PackageId>Avig.OpenXml</PackageId>
-    <Version>0.2.2</Version>
+    <Version>0.2.3</Version>
     <Title>Avig.OpenXml</Title>
     <Description>The package layer under Avig.Kalkyl, Avig.Ord and Avig.Bildspel: reads and writes Open Packaging Conventions files (.xlsx, .docx, .pptx and others), as zip or as Flat OPC, with limits that keep a hostile file from running the process out of memory. Also what the three share: Length, the PresentationML and DrawingML names, and a DrawingML layer that writes and reads shapes, fills, lines, shadows, text, groups, pictures with SVG, and charts, whether they sit on a sheet or a slide. Not related to Microsoft's DocumentFormat.OpenXml. No dependencies besides Avig.Result; trimming and Native AOT safe.</Description>
     <PackageTags>openxml;opc;ooxml;zip;xlsx;docx;pptx;flat-opc;drawingml;charts;shapes</PackageTags>

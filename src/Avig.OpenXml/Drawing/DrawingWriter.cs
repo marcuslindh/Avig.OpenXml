@@ -9,7 +9,7 @@ namespace Avig.OpenXml.Drawing;
 /// relationships in <see cref="DrawingContext.Targets"/> are written by the package that owns the
 /// part. Every element is written in the order the schema gives, which Office checks.
 /// </summary>
-public static class DrawingWriter
+public static partial class DrawingWriter
 {
     private const string Main = OpcNamespaces.DrawingMain;
 
@@ -21,8 +21,7 @@ public static class DrawingWriter
     /// <param name="shape">The shape.</param>
     /// <param name="context">The part's ids and relationships.</param>
     /// <param name="frame">The place and size (a:off, a:ext).</param>
-    /// <returns>A task.</returns>
-    public static async Task WriteShapeAsync(XmlWriter xml, Shape shape, DrawingContext context, DrawingBounds frame)
+    public static void WriteShape(XmlWriter xml, Shape shape, DrawingContext context, DrawingBounds frame)
     {
         ArgumentNullException.ThrowIfNull(xml);
         ArgumentNullException.ThrowIfNull(shape);
@@ -35,63 +34,63 @@ public static class DrawingWriter
 
         if (line == true)
         {
-            await xml.WriteStartElementAsync(tree.Prefix, "cxnSp", tree.Uri);
+            xml.WriteStartElement(tree.Prefix, "cxnSp", tree.Uri);
 
             if (tree.MacroAttributes == true)
             {
-                await xml.WriteAttributeStringAsync(null, "macro", null, string.Empty);
+                xml.WriteAttributeString(null, "macro", null, string.Empty);
             }
 
-            await xml.WriteStartElementAsync(tree.Prefix, "nvCxnSpPr", tree.Uri);
-            await WriteNonVisualPropertiesAsync(xml, tree, shapeId, name, shape.Description, shape.Link, context);
-            await xml.WriteElementStringAsync(tree.Prefix, "cNvCxnSpPr", tree.Uri, string.Empty);
-            await WriteApplicationPropertiesAsync(xml, tree);
-            await xml.WriteEndElementAsync();
+            xml.WriteStartElement(tree.Prefix, "nvCxnSpPr", tree.Uri);
+            WriteNonVisualProperties(xml, tree, shapeId, name, shape.Description, shape.Link, context);
+            xml.WriteElementString(tree.Prefix, "cNvCxnSpPr", tree.Uri, string.Empty);
+            WriteApplicationProperties(xml, tree);
+            xml.WriteEndElement();
         }
         else
         {
-            await xml.WriteStartElementAsync(tree.Prefix, "sp", tree.Uri);
+            xml.WriteStartElement(tree.Prefix, "sp", tree.Uri);
 
             if (tree.MacroAttributes == true)
             {
-                await xml.WriteAttributeStringAsync(null, "macro", null, string.Empty);
-                await xml.WriteAttributeStringAsync(null, "textlink", null, string.Empty);
+                xml.WriteAttributeString(null, "macro", null, string.Empty);
+                xml.WriteAttributeString(null, "textlink", null, string.Empty);
             }
 
-            await xml.WriteStartElementAsync(tree.Prefix, "nvSpPr", tree.Uri);
-            await WriteNonVisualPropertiesAsync(xml, tree, shapeId, name, shape.Description, shape.Link, context);
-            await xml.WriteStartElementAsync(tree.Prefix, "cNvSpPr", tree.Uri);
+            xml.WriteStartElement(tree.Prefix, "nvSpPr", tree.Uri);
+            WriteNonVisualProperties(xml, tree, shapeId, name, shape.Description, shape.Link, context);
+            xml.WriteStartElement(tree.Prefix, "cNvSpPr", tree.Uri);
 
             if (textBox == true)
             {
-                await xml.WriteAttributeStringAsync(null, "txBox", null, "1");
+                xml.WriteAttributeString(null, "txBox", null, "1");
             }
 
-            await xml.WriteEndElementAsync();
-            await WriteApplicationPropertiesAsync(xml, tree);
-            await xml.WriteEndElementAsync();
+            xml.WriteEndElement();
+            WriteApplicationProperties(xml, tree);
+            xml.WriteEndElement();
         }
 
-        await xml.WriteStartElementAsync(tree.Prefix, "spPr", tree.Uri);
-        await xml.WriteStartElementAsync("a", "xfrm", Main);
+        xml.WriteStartElement(tree.Prefix, "spPr", tree.Uri);
+        xml.WriteStartElement("a", "xfrm", Main);
 
         if (shape.Rotation != 0)
         {
-            await xml.WriteAttributeStringAsync(null, "rot", null, DrawingValues.Text(DrawingValues.Angle(shape.Rotation)));
+            xml.WriteAttributeString(null, "rot", null, DrawingValues.Text(DrawingValues.Angle(shape.Rotation)));
         }
 
         if (shape.FlipHorizontal == true)
         {
-            await xml.WriteAttributeStringAsync(null, "flipH", null, "1");
+            xml.WriteAttributeString(null, "flipH", null, "1");
         }
 
         if (shape.FlipVertical == true)
         {
-            await xml.WriteAttributeStringAsync(null, "flipV", null, "1");
+            xml.WriteAttributeString(null, "flipV", null, "1");
         }
 
-        await WriteOffsetAndExtentAsync(xml, frame);
-        await xml.WriteEndElementAsync();
+        WriteOffsetAndExtent(xml, frame);
+        xml.WriteEndElement();
         List<ShapeAdjustment> adjustments = [.. shape.Adjustments];
 
         if (shape.Kind == ShapeKind.RoundedRectangle && shape.CornerRadius is double radius)
@@ -100,7 +99,7 @@ public static class DrawingWriter
             adjustments.Insert(0, new ShapeAdjustment("adj", DrawingValues.Percent(radius)));
         }
 
-        await WritePresetGeometryAsync(xml, shape.Preset, adjustments);
+        WritePresetGeometry(xml, shape.Preset, adjustments);
         Fill? fill = shape.Fill;
         Outline? outline = shape.Outline;
 
@@ -113,28 +112,28 @@ public static class DrawingWriter
 
         if (fill is not null && line == false)
         {
-            await WriteFillAsync(xml, fill, context);
+            WriteFill(xml, fill, context);
         }
 
         if (outline is not null)
         {
-            await WriteOutlineAsync(xml, outline);
+            WriteOutline(xml, outline);
         }
 
         if (shape.Shadow is not null || shape.InnerShadow is not null || shape.SoftEdges is not null)
         {
-            await WriteEffectsAsync(xml, shape.Shadow, shape.InnerShadow, shape.SoftEdges);
+            WriteEffects(xml, shape.Shadow, shape.InnerShadow, shape.SoftEdges);
         }
 
-        await xml.WriteEndElementAsync();
-        await WriteStyleAsync(xml, tree, shape.Kind);
+        xml.WriteEndElement();
+        WriteStyle(xml, tree, shape.Kind);
 
         if (line == false)
         {
-            await WriteTextBodyAsync(xml, tree, shape.Text);
+            WriteTextBody(xml, tree, shape.Text);
         }
 
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
     }
 
     /// <summary>A picture (pic), with the SVG as an extension of the raster blip.</summary>
@@ -142,43 +141,42 @@ public static class DrawingWriter
     /// <param name="picture">The picture.</param>
     /// <param name="context">The part's ids and relationships.</param>
     /// <param name="frame">The place and size.</param>
-    /// <returns>A task.</returns>
-    public static async Task WritePictureAsync(XmlWriter xml, Picture picture, DrawingContext context, DrawingBounds frame)
+    public static void WritePicture(XmlWriter xml, Picture picture, DrawingContext context, DrawingBounds frame)
     {
         ArgumentNullException.ThrowIfNull(xml);
         ArgumentNullException.ThrowIfNull(picture);
         ArgumentNullException.ThrowIfNull(context);
         ShapeTreeNamespace tree = context.Tree;
         int shapeId = context.NextShapeId();
-        await xml.WriteStartElementAsync(tree.Prefix, "pic", tree.Uri);
-        await xml.WriteStartElementAsync(tree.Prefix, "nvPicPr", tree.Uri);
-        await WriteNonVisualPropertiesAsync(xml, tree, shapeId, "Picture " + DrawingValues.Text(shapeId - 1), picture.Description, picture.Link, context);
-        await xml.WriteStartElementAsync(tree.Prefix, "cNvPicPr", tree.Uri);
-        await xml.WriteStartElementAsync("a", "picLocks", Main);
-        await xml.WriteAttributeStringAsync(null, "noChangeAspect", null, "1");
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
-        await WriteApplicationPropertiesAsync(xml, tree);
-        await xml.WriteEndElementAsync();
-        await xml.WriteStartElementAsync(tree.Prefix, "blipFill", tree.Uri);
-        await WriteBlipAsync(xml, picture, context, picture.Transparency);
-        await xml.WriteStartElementAsync("a", "stretch", Main);
-        await xml.WriteElementStringAsync("a", "fillRect", Main, string.Empty);
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
-        await xml.WriteStartElementAsync(tree.Prefix, "spPr", tree.Uri);
-        await xml.WriteStartElementAsync("a", "xfrm", Main);
-        await WriteOffsetAndExtentAsync(xml, frame);
-        await xml.WriteEndElementAsync();
-        await WritePresetGeometryAsync(xml, "rect", []);
+        xml.WriteStartElement(tree.Prefix, "pic", tree.Uri);
+        xml.WriteStartElement(tree.Prefix, "nvPicPr", tree.Uri);
+        WriteNonVisualProperties(xml, tree, shapeId, "Picture " + DrawingValues.Text(shapeId - 1), picture.Description, picture.Link, context);
+        xml.WriteStartElement(tree.Prefix, "cNvPicPr", tree.Uri);
+        xml.WriteStartElement("a", "picLocks", Main);
+        xml.WriteAttributeString(null, "noChangeAspect", null, "1");
+        xml.WriteEndElement();
+        xml.WriteEndElement();
+        WriteApplicationProperties(xml, tree);
+        xml.WriteEndElement();
+        xml.WriteStartElement(tree.Prefix, "blipFill", tree.Uri);
+        WriteBlip(xml, picture, context, picture.Transparency);
+        xml.WriteStartElement("a", "stretch", Main);
+        xml.WriteElementString("a", "fillRect", Main, string.Empty);
+        xml.WriteEndElement();
+        xml.WriteEndElement();
+        xml.WriteStartElement(tree.Prefix, "spPr", tree.Uri);
+        xml.WriteStartElement("a", "xfrm", Main);
+        WriteOffsetAndExtent(xml, frame);
+        xml.WriteEndElement();
+        WritePresetGeometry(xml, "rect", []);
 
         if (picture.Shadow is not null)
         {
-            await WriteEffectsAsync(xml, picture.Shadow, null, null);
+            WriteEffects(xml, picture.Shadow, null, null);
         }
 
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
+        xml.WriteEndElement();
     }
 
     /// <summary>A group (grpSp), whose items' own coordinates are mapped onto its frame.</summary>
@@ -186,20 +184,19 @@ public static class DrawingWriter
     /// <param name="group">The group.</param>
     /// <param name="context">The part's ids and relationships.</param>
     /// <param name="frame">The place and size of the whole group.</param>
-    /// <returns>A task.</returns>
-    public static async Task WriteGroupAsync(XmlWriter xml, ShapeGroup group, DrawingContext context, DrawingBounds frame)
+    public static void WriteGroup(XmlWriter xml, ShapeGroup group, DrawingContext context, DrawingBounds frame)
     {
         ArgumentNullException.ThrowIfNull(xml);
         ArgumentNullException.ThrowIfNull(group);
         ArgumentNullException.ThrowIfNull(context);
         ShapeTreeNamespace tree = context.Tree;
         int shapeId = context.NextShapeId();
-        await xml.WriteStartElementAsync(tree.Prefix, "grpSp", tree.Uri);
-        await xml.WriteStartElementAsync(tree.Prefix, "nvGrpSpPr", tree.Uri);
-        await WriteNonVisualPropertiesAsync(xml, tree, shapeId, group.Name ?? "Group " + DrawingValues.Text(shapeId - 1), group.Description, group.Link, context);
-        await xml.WriteElementStringAsync(tree.Prefix, "cNvGrpSpPr", tree.Uri, string.Empty);
-        await WriteApplicationPropertiesAsync(xml, tree);
-        await xml.WriteEndElementAsync();
+        xml.WriteStartElement(tree.Prefix, "grpSp", tree.Uri);
+        xml.WriteStartElement(tree.Prefix, "nvGrpSpPr", tree.Uri);
+        WriteNonVisualProperties(xml, tree, shapeId, group.Name ?? "Group " + DrawingValues.Text(shapeId - 1), group.Description, group.Link, context);
+        xml.WriteElementString(tree.Prefix, "cNvGrpSpPr", tree.Uri, string.Empty);
+        WriteApplicationProperties(xml, tree);
+        xml.WriteEndElement();
 
         // The items' own coordinates (chOff, chExt) are mapped onto the group's place, so the
         // box around them fills it.
@@ -207,37 +204,37 @@ public static class DrawingWriter
         long top = group.Items.Min(item => item.Bounds.Top.Emu);
         long right = group.Items.Max(item => item.Bounds.Left.Emu + item.Bounds.Width.Emu);
         long bottom = group.Items.Max(item => item.Bounds.Top.Emu + item.Bounds.Height.Emu);
-        await xml.WriteStartElementAsync(tree.Prefix, "grpSpPr", tree.Uri);
-        await xml.WriteStartElementAsync("a", "xfrm", Main);
-        await WriteOffsetAndExtentAsync(xml, frame);
-        await xml.WriteStartElementAsync("a", "chOff", Main);
-        await xml.WriteAttributeStringAsync(null, "x", null, DrawingValues.Text(left));
-        await xml.WriteAttributeStringAsync(null, "y", null, DrawingValues.Text(top));
-        await xml.WriteEndElementAsync();
-        await xml.WriteStartElementAsync("a", "chExt", Main);
-        await xml.WriteAttributeStringAsync(null, "cx", null, DrawingValues.Text(Math.Max(right - left, 1)));
-        await xml.WriteAttributeStringAsync(null, "cy", null, DrawingValues.Text(Math.Max(bottom - top, 1)));
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
+        xml.WriteStartElement(tree.Prefix, "grpSpPr", tree.Uri);
+        xml.WriteStartElement("a", "xfrm", Main);
+        WriteOffsetAndExtent(xml, frame);
+        xml.WriteStartElement("a", "chOff", Main);
+        xml.WriteAttributeString(null, "x", null, DrawingValues.Text(left));
+        xml.WriteAttributeString(null, "y", null, DrawingValues.Text(top));
+        xml.WriteEndElement();
+        xml.WriteStartElement("a", "chExt", Main);
+        xml.WriteAttributeString(null, "cx", null, DrawingValues.Text(Math.Max(right - left, 1)));
+        xml.WriteAttributeString(null, "cy", null, DrawingValues.Text(Math.Max(bottom - top, 1)));
+        xml.WriteEndElement();
+        xml.WriteEndElement();
+        xml.WriteEndElement();
 
         foreach (GroupItem item in group.Items)
         {
             if (item.Shape is not null)
             {
-                await WriteShapeAsync(xml, item.Shape, context, item.Bounds);
+                WriteShape(xml, item.Shape, context, item.Bounds);
             }
             else if (item.Picture is not null)
             {
-                await WritePictureAsync(xml, item.Picture, context, item.Bounds);
+                WritePicture(xml, item.Picture, context, item.Bounds);
             }
             else
             {
-                await WriteGroupAsync(xml, item.Group!, context, item.Bounds);
+                WriteGroup(xml, item.Group!, context, item.Bounds);
             }
         }
 
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
     }
 
     /// <summary>A graphic frame that shows a chart part; the chart itself is written with <see cref="ChartWriter"/>.</summary>
@@ -246,8 +243,7 @@ public static class DrawingWriter
     /// <param name="description">The alternative text, or null.</param>
     /// <param name="context">The part's ids and relationships.</param>
     /// <param name="frame">The place and size.</param>
-    /// <returns>A task.</returns>
-    public static async Task WriteChartFrameAsync(XmlWriter xml, object chart, string? description, DrawingContext context, DrawingBounds frame)
+    public static void WriteChartFrame(XmlWriter xml, object chart, string? description, DrawingContext context, DrawingBounds frame)
     {
         ArgumentNullException.ThrowIfNull(xml);
         ArgumentNullException.ThrowIfNull(chart);
@@ -255,38 +251,37 @@ public static class DrawingWriter
         ShapeTreeNamespace tree = context.Tree;
         int shapeId = context.NextShapeId();
         string relationshipId = context.Chart(chart);
-        await xml.WriteStartElementAsync(tree.Prefix, "graphicFrame", tree.Uri);
+        xml.WriteStartElement(tree.Prefix, "graphicFrame", tree.Uri);
 
         if (tree.MacroAttributes == true)
         {
-            await xml.WriteAttributeStringAsync(null, "macro", null, string.Empty);
+            xml.WriteAttributeString(null, "macro", null, string.Empty);
         }
 
-        await xml.WriteStartElementAsync(tree.Prefix, "nvGraphicFramePr", tree.Uri);
-        await WriteNonVisualPropertiesAsync(xml, tree, shapeId, "Chart " + DrawingValues.Text(shapeId - 1), description, null, context);
-        await xml.WriteElementStringAsync(tree.Prefix, "cNvGraphicFramePr", tree.Uri, string.Empty);
-        await WriteApplicationPropertiesAsync(xml, tree);
-        await xml.WriteEndElementAsync();
-        await xml.WriteStartElementAsync(tree.Prefix, "xfrm", tree.Uri);
-        await WriteOffsetAndExtentAsync(xml, frame);
-        await xml.WriteEndElementAsync();
-        await xml.WriteStartElementAsync("a", "graphic", Main);
-        await xml.WriteStartElementAsync("a", "graphicData", Main);
-        await xml.WriteAttributeStringAsync(null, "uri", null, OpcNamespaces.DrawingChart);
-        await xml.WriteStartElementAsync("c", "chart", OpcNamespaces.DrawingChart);
-        await xml.WriteAttributeStringAsync("r", "id", OpcNamespaces.Relationships, relationshipId);
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
+        xml.WriteStartElement(tree.Prefix, "nvGraphicFramePr", tree.Uri);
+        WriteNonVisualProperties(xml, tree, shapeId, "Chart " + DrawingValues.Text(shapeId - 1), description, null, context);
+        xml.WriteElementString(tree.Prefix, "cNvGraphicFramePr", tree.Uri, string.Empty);
+        WriteApplicationProperties(xml, tree);
+        xml.WriteEndElement();
+        xml.WriteStartElement(tree.Prefix, "xfrm", tree.Uri);
+        WriteOffsetAndExtent(xml, frame);
+        xml.WriteEndElement();
+        xml.WriteStartElement("a", "graphic", Main);
+        xml.WriteStartElement("a", "graphicData", Main);
+        xml.WriteAttributeString(null, "uri", null, OpcNamespaces.DrawingChart);
+        xml.WriteStartElement("c", "chart", OpcNamespaces.DrawingChart);
+        xml.WriteAttributeString("r", "id", OpcNamespaces.Relationships, relationshipId);
+        xml.WriteEndElement();
+        xml.WriteEndElement();
+        xml.WriteEndElement();
+        xml.WriteEndElement();
     }
 
     /// <summary>An a:solidFill, a:gradFill, a:pattFill, a:blipFill or a:noFill.</summary>
     /// <param name="xml">The writer.</param>
     /// <param name="fill">The fill.</param>
     /// <param name="context">The part's relationships, which a picture fill needs; null where there are none, as in a chart.</param>
-    /// <returns>A task.</returns>
-    public static async Task WriteFillAsync(XmlWriter xml, Fill fill, DrawingContext? context = null)
+    public static void WriteFill(XmlWriter xml, Fill fill, DrawingContext? context = null)
     {
         ArgumentNullException.ThrowIfNull(xml);
         ArgumentNullException.ThrowIfNull(fill);
@@ -294,27 +289,27 @@ public static class DrawingWriter
         switch (fill.Kind)
         {
             case FillKind.None:
-                await xml.WriteElementStringAsync("a", "noFill", Main, string.Empty);
+                xml.WriteElementString("a", "noFill", Main, string.Empty);
 
                 break;
 
             case FillKind.Solid:
-                await xml.WriteStartElementAsync("a", "solidFill", Main);
-                await WriteColorAsync(xml, fill.Color!, fill.Transparency);
-                await xml.WriteEndElementAsync();
+                xml.WriteStartElement("a", "solidFill", Main);
+                WriteColor(xml, fill.Color!, fill.Transparency);
+                xml.WriteEndElement();
 
                 break;
 
             case FillKind.Pattern:
-                await xml.WriteStartElementAsync("a", "pattFill", Main);
-                await xml.WriteAttributeStringAsync(null, "prst", null, DrawingNames.Pattern(fill.PatternType));
-                await xml.WriteStartElementAsync("a", "fgClr", Main);
-                await WriteColorAsync(xml, fill.Color!, 0);
-                await xml.WriteEndElementAsync();
-                await xml.WriteStartElementAsync("a", "bgClr", Main);
-                await WriteColorAsync(xml, fill.BackgroundColor!, 0);
-                await xml.WriteEndElementAsync();
-                await xml.WriteEndElementAsync();
+                xml.WriteStartElement("a", "pattFill", Main);
+                xml.WriteAttributeString(null, "prst", null, DrawingNames.Pattern(fill.PatternType));
+                xml.WriteStartElement("a", "fgClr", Main);
+                WriteColor(xml, fill.Color!, 0);
+                xml.WriteEndElement();
+                xml.WriteStartElement("a", "bgClr", Main);
+                WriteColor(xml, fill.BackgroundColor!, 0);
+                xml.WriteEndElement();
+                xml.WriteEndElement();
 
                 break;
 
@@ -324,35 +319,35 @@ public static class DrawingWriter
                     throw new InvalidOperationException("A picture fill needs a DrawingContext for the image's relationship.");
                 }
 
-                await xml.WriteStartElementAsync("a", "blipFill", Main);
-                await xml.WriteAttributeStringAsync(null, "rotWithShape", null, "1");
-                await WriteBlipAsync(xml, fill.Image!, context, 0);
-                await xml.WriteStartElementAsync("a", "stretch", Main);
-                await xml.WriteElementStringAsync("a", "fillRect", Main, string.Empty);
-                await xml.WriteEndElementAsync();
-                await xml.WriteEndElementAsync();
+                xml.WriteStartElement("a", "blipFill", Main);
+                xml.WriteAttributeString(null, "rotWithShape", null, "1");
+                WriteBlip(xml, fill.Image!, context, 0);
+                xml.WriteStartElement("a", "stretch", Main);
+                xml.WriteElementString("a", "fillRect", Main, string.Empty);
+                xml.WriteEndElement();
+                xml.WriteEndElement();
 
                 break;
 
             default:
-                await xml.WriteStartElementAsync("a", "gradFill", Main);
-                await xml.WriteAttributeStringAsync(null, "rotWithShape", null, "1");
-                await xml.WriteStartElementAsync("a", "gsLst", Main);
+                xml.WriteStartElement("a", "gradFill", Main);
+                xml.WriteAttributeString(null, "rotWithShape", null, "1");
+                xml.WriteStartElement("a", "gsLst", Main);
 
                 foreach (GradientStop stop in fill.Stops.OrderBy(stop => stop.Position))
                 {
-                    await xml.WriteStartElementAsync("a", "gs", Main);
-                    await xml.WriteAttributeStringAsync(null, "pos", null, DrawingValues.Text(DrawingValues.Percent(stop.Position)));
-                    await WriteColorAsync(xml, stop.Color, stop.Transparency);
-                    await xml.WriteEndElementAsync();
+                    xml.WriteStartElement("a", "gs", Main);
+                    xml.WriteAttributeString(null, "pos", null, DrawingValues.Text(DrawingValues.Percent(stop.Position)));
+                    WriteColor(xml, stop.Color, stop.Transparency);
+                    xml.WriteEndElement();
                 }
 
-                await xml.WriteEndElementAsync();
-                await xml.WriteStartElementAsync("a", "lin", Main);
-                await xml.WriteAttributeStringAsync(null, "ang", null, DrawingValues.Text(DrawingValues.Angle(fill.Angle)));
-                await xml.WriteAttributeStringAsync(null, "scaled", null, "0");
-                await xml.WriteEndElementAsync();
-                await xml.WriteEndElementAsync();
+                xml.WriteEndElement();
+                xml.WriteStartElement("a", "lin", Main);
+                xml.WriteAttributeString(null, "ang", null, DrawingValues.Text(DrawingValues.Angle(fill.Angle)));
+                xml.WriteAttributeString(null, "scaled", null, "0");
+                xml.WriteEndElement();
+                xml.WriteEndElement();
 
                 break;
         }
@@ -361,34 +356,33 @@ public static class DrawingWriter
     /// <summary>An a:ln.</summary>
     /// <param name="xml">The writer.</param>
     /// <param name="outline">The line.</param>
-    /// <returns>A task.</returns>
-    public static async Task WriteOutlineAsync(XmlWriter xml, Outline outline)
+    public static void WriteOutline(XmlWriter xml, Outline outline)
     {
         ArgumentNullException.ThrowIfNull(xml);
         ArgumentNullException.ThrowIfNull(outline);
-        await xml.WriteStartElementAsync("a", "ln", Main);
+        xml.WriteStartElement("a", "ln", Main);
 
         if (outline.Color is null)
         {
-            await xml.WriteElementStringAsync("a", "noFill", Main, string.Empty);
-            await xml.WriteEndElementAsync();
+            xml.WriteElementString("a", "noFill", Main, string.Empty);
+            xml.WriteEndElement();
 
             return;
         }
 
-        await xml.WriteAttributeStringAsync(null, "w", null, DrawingValues.Text(DrawingValues.Emu(outline.Width)));
-        await xml.WriteStartElementAsync("a", "solidFill", Main);
-        await WriteColorAsync(xml, outline.Color, outline.Transparency);
-        await xml.WriteEndElementAsync();
+        xml.WriteAttributeString(null, "w", null, DrawingValues.Text(DrawingValues.Emu(outline.Width)));
+        xml.WriteStartElement("a", "solidFill", Main);
+        WriteColor(xml, outline.Color, outline.Transparency);
+        xml.WriteEndElement();
 
         if (outline.Dash != LineDash.Solid)
         {
-            await xml.WriteStartElementAsync("a", "prstDash", Main);
-            await xml.WriteAttributeStringAsync(null, "val", null, DrawingNames.Dash(outline.Dash));
-            await xml.WriteEndElementAsync();
+            xml.WriteStartElement("a", "prstDash", Main);
+            xml.WriteAttributeString(null, "val", null, DrawingNames.Dash(outline.Dash));
+            xml.WriteEndElement();
         }
 
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
     }
 
     /// <summary>An a:effectLst with the shadows and soft edges given, in the schema's order.</summary>
@@ -396,38 +390,37 @@ public static class DrawingWriter
     /// <param name="outer">The shadow behind, or null.</param>
     /// <param name="inner">The shadow inside, or null.</param>
     /// <param name="softEdges">Soft edges in points, or null.</param>
-    /// <returns>A task.</returns>
-    public static async Task WriteEffectsAsync(XmlWriter xml, Shadow? outer, Shadow? inner, double? softEdges)
+    public static void WriteEffects(XmlWriter xml, Shadow? outer, Shadow? inner, double? softEdges)
     {
         ArgumentNullException.ThrowIfNull(xml);
-        await xml.WriteStartElementAsync("a", "effectLst", Main);
+        xml.WriteStartElement("a", "effectLst", Main);
 
         if (inner is not null)
         {
-            await xml.WriteStartElementAsync("a", "innerShdw", Main);
-            await WriteShadowAttributesAsync(xml, inner);
-            await WriteColorAsync(xml, inner.Color, inner.Transparency);
-            await xml.WriteEndElementAsync();
+            xml.WriteStartElement("a", "innerShdw", Main);
+            WriteShadowAttributes(xml, inner);
+            WriteColor(xml, inner.Color, inner.Transparency);
+            xml.WriteEndElement();
         }
 
         if (outer is not null)
         {
-            await xml.WriteStartElementAsync("a", "outerShdw", Main);
-            await WriteShadowAttributesAsync(xml, outer);
-            await xml.WriteAttributeStringAsync(null, "algn", null, "tl");
-            await xml.WriteAttributeStringAsync(null, "rotWithShape", null, "0");
-            await WriteColorAsync(xml, outer.Color, outer.Transparency);
-            await xml.WriteEndElementAsync();
+            xml.WriteStartElement("a", "outerShdw", Main);
+            WriteShadowAttributes(xml, outer);
+            xml.WriteAttributeString(null, "algn", null, "tl");
+            xml.WriteAttributeString(null, "rotWithShape", null, "0");
+            WriteColor(xml, outer.Color, outer.Transparency);
+            xml.WriteEndElement();
         }
 
         if (softEdges is double points)
         {
-            await xml.WriteStartElementAsync("a", "softEdge", Main);
-            await xml.WriteAttributeStringAsync(null, "rad", null, DrawingValues.Text(DrawingValues.Emu(points)));
-            await xml.WriteEndElementAsync();
+            xml.WriteStartElement("a", "softEdge", Main);
+            xml.WriteAttributeString(null, "rad", null, DrawingValues.Text(DrawingValues.Emu(points)));
+            xml.WriteEndElement();
         }
 
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
     }
 
     /// <summary>
@@ -437,104 +430,102 @@ public static class DrawingWriter
     /// <param name="xml">The writer.</param>
     /// <param name="element">rPr, defRPr or endParaRPr.</param>
     /// <param name="font">The font, or null for the element alone.</param>
-    /// <returns>A task.</returns>
-    public static async Task WriteRunPropertiesAsync(XmlWriter xml, string element, TextFont? font)
+    public static void WriteRunProperties(XmlWriter xml, string element, TextFont? font)
     {
         ArgumentNullException.ThrowIfNull(xml);
         ArgumentNullException.ThrowIfNull(element);
-        await xml.WriteStartElementAsync("a", element, Main);
+        xml.WriteStartElement("a", element, Main);
 
         if (element != "defRPr")
         {
-            await xml.WriteAttributeStringAsync(null, "lang", null, "en-US");
+            xml.WriteAttributeString(null, "lang", null, "en-US");
         }
 
         if (font is null)
         {
-            await xml.WriteEndElementAsync();
+            xml.WriteEndElement();
 
             return;
         }
 
         if (font.Size is double size)
         {
-            await xml.WriteAttributeStringAsync(null, "sz", null, DrawingValues.Text((long)Math.Round(size * 100)));
+            xml.WriteAttributeString(null, "sz", null, DrawingValues.Text((long)Math.Round(size * 100)));
         }
 
-        await xml.WriteAttributeStringAsync(null, "b", null, DrawingValues.Flag(font.Bold));
-        await xml.WriteAttributeStringAsync(null, "i", null, DrawingValues.Flag(font.Italic));
+        xml.WriteAttributeString(null, "b", null, DrawingValues.Flag(font.Bold));
+        xml.WriteAttributeString(null, "i", null, DrawingValues.Flag(font.Italic));
 
         if (font.Color is not null)
         {
-            await xml.WriteStartElementAsync("a", "solidFill", Main);
-            await WriteColorAsync(xml, font.Color, 0);
-            await xml.WriteEndElementAsync();
+            xml.WriteStartElement("a", "solidFill", Main);
+            WriteColor(xml, font.Color, 0);
+            xml.WriteEndElement();
         }
 
         if (font.Name is not null)
         {
-            await xml.WriteStartElementAsync("a", "latin", Main);
-            await xml.WriteAttributeStringAsync(null, "typeface", null, font.Name);
-            await xml.WriteEndElementAsync();
-            await xml.WriteStartElementAsync("a", "cs", Main);
-            await xml.WriteAttributeStringAsync(null, "typeface", null, font.Name);
-            await xml.WriteEndElementAsync();
+            xml.WriteStartElement("a", "latin", Main);
+            xml.WriteAttributeString(null, "typeface", null, font.Name);
+            xml.WriteEndElement();
+            xml.WriteStartElement("a", "cs", Main);
+            xml.WriteAttributeString(null, "typeface", null, font.Name);
+            xml.WriteEndElement();
         }
 
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
     }
 
     /// <summary>An a:off and an a:ext, in EMU.</summary>
     /// <param name="xml">The writer, inside an xfrm.</param>
     /// <param name="frame">The place and size.</param>
-    /// <returns>A task.</returns>
-    public static async Task WriteOffsetAndExtentAsync(XmlWriter xml, DrawingBounds frame)
+    public static void WriteOffsetAndExtent(XmlWriter xml, DrawingBounds frame)
     {
         ArgumentNullException.ThrowIfNull(xml);
-        await xml.WriteStartElementAsync("a", "off", Main);
-        await xml.WriteAttributeStringAsync(null, "x", null, DrawingValues.Text(frame.Left.Emu));
-        await xml.WriteAttributeStringAsync(null, "y", null, DrawingValues.Text(frame.Top.Emu));
-        await xml.WriteEndElementAsync();
-        await xml.WriteStartElementAsync("a", "ext", Main);
-        await xml.WriteAttributeStringAsync(null, "cx", null, DrawingValues.Text(frame.Width.Emu));
-        await xml.WriteAttributeStringAsync(null, "cy", null, DrawingValues.Text(frame.Height.Emu));
-        await xml.WriteEndElementAsync();
+        xml.WriteStartElement("a", "off", Main);
+        xml.WriteAttributeString(null, "x", null, DrawingValues.Text(frame.Left.Emu));
+        xml.WriteAttributeString(null, "y", null, DrawingValues.Text(frame.Top.Emu));
+        xml.WriteEndElement();
+        xml.WriteStartElement("a", "ext", Main);
+        xml.WriteAttributeString(null, "cx", null, DrawingValues.Text(frame.Width.Emu));
+        xml.WriteAttributeString(null, "cy", null, DrawingValues.Text(frame.Height.Emu));
+        xml.WriteEndElement();
     }
 
     /// <summary>The a:blip of a picture: the raster image, with the SVG as an extension older versions skip.</summary>
-    private static async Task WriteBlipAsync(XmlWriter xml, Picture picture, DrawingContext context, double transparency)
+    private static void WriteBlip(XmlWriter xml, Picture picture, DrawingContext context, double transparency)
     {
-        await xml.WriteStartElementAsync("a", "blip", Main);
+        xml.WriteStartElement("a", "blip", Main);
 
         // An SVG is stored as Office 2016 stores it: the raster fallback is the blip, and the
         // SVG an extension of it.
         Picture raster = picture.Fallback ?? picture;
-        await xml.WriteAttributeStringAsync("r", "embed", OpcNamespaces.Relationships, context.Image(raster));
+        xml.WriteAttributeString("r", "embed", OpcNamespaces.Relationships, context.Image(raster));
 
         if (transparency > 0)
         {
-            await xml.WriteStartElementAsync("a", "alphaModFix", Main);
-            await xml.WriteAttributeStringAsync(null, "amt", null, DrawingValues.Text(DrawingValues.Percent(1 - transparency)));
-            await xml.WriteEndElementAsync();
+            xml.WriteStartElement("a", "alphaModFix", Main);
+            xml.WriteAttributeString(null, "amt", null, DrawingValues.Text(DrawingValues.Percent(1 - transparency)));
+            xml.WriteEndElement();
         }
 
         if (picture.Fallback is not null)
         {
-            await xml.WriteStartElementAsync("a", "extLst", Main);
-            await xml.WriteStartElementAsync("a", "ext", Main);
-            await xml.WriteAttributeStringAsync(null, "uri", null, SvgExtensionUri);
-            await xml.WriteStartElementAsync("asvg", "svgBlip", OpcNamespaces.DrawingSvg);
-            await xml.WriteAttributeStringAsync("r", "embed", OpcNamespaces.Relationships, context.Image(picture));
-            await xml.WriteEndElementAsync();
-            await xml.WriteEndElementAsync();
-            await xml.WriteEndElementAsync();
+            xml.WriteStartElement("a", "extLst", Main);
+            xml.WriteStartElement("a", "ext", Main);
+            xml.WriteAttributeString(null, "uri", null, SvgExtensionUri);
+            xml.WriteStartElement("asvg", "svgBlip", OpcNamespaces.DrawingSvg);
+            xml.WriteAttributeString("r", "embed", OpcNamespaces.Relationships, context.Image(picture));
+            xml.WriteEndElement();
+            xml.WriteEndElement();
+            xml.WriteEndElement();
         }
 
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
     }
 
     /// <summary>The theme references Office gives a new shape, so that what is left unset looks as in Office.</summary>
-    private static async Task WriteStyleAsync(XmlWriter xml, ShapeTreeNamespace tree, ShapeKind? kind)
+    private static void WriteStyle(XmlWriter xml, ShapeTreeNamespace tree, ShapeKind? kind)
     {
         (string Line, string Fill, string Effect, string Font, bool Shade) style = kind switch
         {
@@ -543,83 +534,83 @@ public static class DrawingWriter
             _ => ("2", "1", "0", "lt1", true),
         };
 
-        await xml.WriteStartElementAsync(tree.Prefix, "style", tree.Uri);
-        await WriteStyleReferenceAsync(xml, "lnRef", style.Line, "accent1", style.Shade);
-        await WriteStyleReferenceAsync(xml, "fillRef", style.Fill, "accent1", false);
-        await WriteStyleReferenceAsync(xml, "effectRef", style.Effect, "accent1", false);
-        await xml.WriteStartElementAsync("a", "fontRef", Main);
-        await xml.WriteAttributeStringAsync(null, "idx", null, "minor");
-        await xml.WriteStartElementAsync("a", "schemeClr", Main);
-        await xml.WriteAttributeStringAsync(null, "val", null, style.Font);
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
+        xml.WriteStartElement(tree.Prefix, "style", tree.Uri);
+        WriteStyleReference(xml, "lnRef", style.Line, "accent1", style.Shade);
+        WriteStyleReference(xml, "fillRef", style.Fill, "accent1", false);
+        WriteStyleReference(xml, "effectRef", style.Effect, "accent1", false);
+        xml.WriteStartElement("a", "fontRef", Main);
+        xml.WriteAttributeString(null, "idx", null, "minor");
+        xml.WriteStartElement("a", "schemeClr", Main);
+        xml.WriteAttributeString(null, "val", null, style.Font);
+        xml.WriteEndElement();
+        xml.WriteEndElement();
+        xml.WriteEndElement();
     }
 
-    private static async Task WriteStyleReferenceAsync(XmlWriter xml, string element, string index, string color, bool shade)
+    private static void WriteStyleReference(XmlWriter xml, string element, string index, string color, bool shade)
     {
-        await xml.WriteStartElementAsync("a", element, Main);
-        await xml.WriteAttributeStringAsync(null, "idx", null, index);
-        await xml.WriteStartElementAsync("a", "schemeClr", Main);
-        await xml.WriteAttributeStringAsync(null, "val", null, color);
+        xml.WriteStartElement("a", element, Main);
+        xml.WriteAttributeString(null, "idx", null, index);
+        xml.WriteStartElement("a", "schemeClr", Main);
+        xml.WriteAttributeString(null, "val", null, color);
 
         if (shade == true)
         {
-            await xml.WriteStartElementAsync("a", "shade", Main);
-            await xml.WriteAttributeStringAsync(null, "val", null, "15000");
-            await xml.WriteEndElementAsync();
+            xml.WriteStartElement("a", "shade", Main);
+            xml.WriteAttributeString(null, "val", null, "15000");
+            xml.WriteEndElement();
         }
 
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
+        xml.WriteEndElement();
     }
 
     /// <summary>The shape's txBody: one a:p per line of the runs, each run with its own look.</summary>
-    private static async Task WriteTextBodyAsync(XmlWriter xml, ShapeTreeNamespace tree, ShapeText? text)
+    private static void WriteTextBody(XmlWriter xml, ShapeTreeNamespace tree, ShapeText? text)
     {
-        await xml.WriteStartElementAsync(tree.Prefix, "txBody", tree.Uri);
-        await xml.WriteStartElementAsync("a", "bodyPr", Main);
-        await xml.WriteAttributeStringAsync(null, "vertOverflow", null, "clip");
-        await xml.WriteAttributeStringAsync(null, "horzOverflow", null, "clip");
+        xml.WriteStartElement(tree.Prefix, "txBody", tree.Uri);
+        xml.WriteStartElement("a", "bodyPr", Main);
+        xml.WriteAttributeString(null, "vertOverflow", null, "clip");
+        xml.WriteAttributeString(null, "horzOverflow", null, "clip");
 
         if (text is not null)
         {
             if (text.Wrap == true)
             {
-                await xml.WriteAttributeStringAsync(null, "wrap", null, "square");
+                xml.WriteAttributeString(null, "wrap", null, "square");
             }
             else
             {
-                await xml.WriteAttributeStringAsync(null, "wrap", null, "none");
+                xml.WriteAttributeString(null, "wrap", null, "none");
             }
 
-            await WriteInsetAsync(xml, "lIns", text.MarginLeft);
-            await WriteInsetAsync(xml, "tIns", text.MarginTop);
-            await WriteInsetAsync(xml, "rIns", text.MarginRight);
-            await WriteInsetAsync(xml, "bIns", text.MarginBottom);
+            WriteInset(xml, "lIns", text.MarginLeft);
+            WriteInset(xml, "tIns", text.MarginTop);
+            WriteInset(xml, "rIns", text.MarginRight);
+            WriteInset(xml, "bIns", text.MarginBottom);
         }
 
-        await xml.WriteAttributeStringAsync(null, "rtlCol", null, "0");
-        await xml.WriteAttributeStringAsync(null, "anchor", null, DrawingNames.Anchor(text?.Vertical ?? TextAnchor.Top));
-        await xml.WriteEndElementAsync();
-        await xml.WriteElementStringAsync("a", "lstStyle", Main, string.Empty);
+        xml.WriteAttributeString(null, "rtlCol", null, "0");
+        xml.WriteAttributeString(null, "anchor", null, DrawingNames.Anchor(text?.Vertical ?? TextAnchor.Top));
+        xml.WriteEndElement();
+        xml.WriteElementString("a", "lstStyle", Main, string.Empty);
         string alignment = DrawingNames.Alignment(text?.Horizontal ?? TextAlignment.Left);
 
         if (text is null)
         {
-            await xml.WriteStartElementAsync("a", "p", Main);
-            await WriteParagraphPropertiesAsync(xml, alignment);
-            await WriteRunPropertiesAsync(xml, "endParaRPr", new TextFont { Size = 11 });
-            await xml.WriteEndElementAsync();
-            await xml.WriteEndElementAsync();
+            xml.WriteStartElement("a", "p", Main);
+            WriteParagraphProperties(xml, alignment);
+            WriteRunProperties(xml, "endParaRPr", new TextFont { Size = 11 });
+            xml.WriteEndElement();
+            xml.WriteEndElement();
 
             return;
         }
 
         foreach (List<TextRun> paragraph in Paragraphs(text.Runs))
         {
-            await xml.WriteStartElementAsync("a", "p", Main);
-            await WriteParagraphPropertiesAsync(xml, alignment);
+            xml.WriteStartElement("a", "p", Main);
+            WriteParagraphProperties(xml, alignment);
             TextFont? last = null;
 
             foreach (TextRun run in paragraph)
@@ -631,18 +622,18 @@ public static class DrawingWriter
                     continue;
                 }
 
-                await xml.WriteStartElementAsync("a", "r", Main);
-                await WriteRunPropertiesAsync(xml, "rPr", run.Font);
-                await xml.WriteElementStringAsync("a", "t", Main, run.Text);
-                await xml.WriteEndElementAsync();
+                xml.WriteStartElement("a", "r", Main);
+                WriteRunProperties(xml, "rPr", run.Font);
+                xml.WriteElementString("a", "t", Main, run.Text);
+                xml.WriteEndElement();
             }
 
             // Gives an empty line its height, and the cursor its look at the end of a line.
-            await WriteRunPropertiesAsync(xml, "endParaRPr", last);
-            await xml.WriteEndElementAsync();
+            WriteRunProperties(xml, "endParaRPr", last);
+            xml.WriteEndElement();
         }
 
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
     }
 
     /// <summary>The runs split at each line break (\n, \r\n or \r) into paragraphs; a run split so keeps its font on both sides.</summary>
@@ -668,100 +659,100 @@ public static class DrawingWriter
         return paragraphs;
     }
 
-    private static async Task WriteParagraphPropertiesAsync(XmlWriter xml, string alignment)
+    private static void WriteParagraphProperties(XmlWriter xml, string alignment)
     {
-        await xml.WriteStartElementAsync("a", "pPr", Main);
-        await xml.WriteAttributeStringAsync(null, "algn", null, alignment);
-        await xml.WriteEndElementAsync();
+        xml.WriteStartElement("a", "pPr", Main);
+        xml.WriteAttributeString(null, "algn", null, alignment);
+        xml.WriteEndElement();
     }
 
-    private static async Task WriteInsetAsync(XmlWriter xml, string name, double? points)
+    private static void WriteInset(XmlWriter xml, string name, double? points)
     {
         if (points is double value)
         {
-            await xml.WriteAttributeStringAsync(null, name, null, DrawingValues.Text(DrawingValues.Emu(value)));
+            xml.WriteAttributeString(null, name, null, DrawingValues.Text(DrawingValues.Emu(value)));
         }
     }
 
-    private static async Task WritePresetGeometryAsync(XmlWriter xml, string preset, IReadOnlyList<ShapeAdjustment> adjustments)
+    private static void WritePresetGeometry(XmlWriter xml, string preset, IReadOnlyList<ShapeAdjustment> adjustments)
     {
-        await xml.WriteStartElementAsync("a", "prstGeom", Main);
-        await xml.WriteAttributeStringAsync(null, "prst", null, preset);
-        await xml.WriteStartElementAsync("a", "avLst", Main);
+        xml.WriteStartElement("a", "prstGeom", Main);
+        xml.WriteAttributeString(null, "prst", null, preset);
+        xml.WriteStartElement("a", "avLst", Main);
 
         foreach (ShapeAdjustment adjustment in adjustments)
         {
-            await xml.WriteStartElementAsync("a", "gd", Main);
-            await xml.WriteAttributeStringAsync(null, "name", null, adjustment.Name);
-            await xml.WriteAttributeStringAsync(null, "fmla", null, "val " + DrawingValues.Text(adjustment.Value));
-            await xml.WriteEndElementAsync();
+            xml.WriteStartElement("a", "gd", Main);
+            xml.WriteAttributeString(null, "name", null, adjustment.Name);
+            xml.WriteAttributeString(null, "fmla", null, "val " + DrawingValues.Text(adjustment.Value));
+            xml.WriteEndElement();
         }
 
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
+        xml.WriteEndElement();
     }
 
     /// <summary>A cNvPr: id, name, alternative text and the click's link.</summary>
-    private static async Task WriteNonVisualPropertiesAsync(XmlWriter xml, ShapeTreeNamespace tree, int shapeId, string name, string? description, Hyperlink? link, DrawingContext context)
+    private static void WriteNonVisualProperties(XmlWriter xml, ShapeTreeNamespace tree, int shapeId, string name, string? description, Hyperlink? link, DrawingContext context)
     {
-        await xml.WriteStartElementAsync(tree.Prefix, "cNvPr", tree.Uri);
-        await xml.WriteAttributeStringAsync(null, "id", null, DrawingValues.Text(shapeId));
-        await xml.WriteAttributeStringAsync(null, "name", null, name);
+        xml.WriteStartElement(tree.Prefix, "cNvPr", tree.Uri);
+        xml.WriteAttributeString(null, "id", null, DrawingValues.Text(shapeId));
+        xml.WriteAttributeString(null, "name", null, name);
 
         if (description is not null)
         {
-            await xml.WriteAttributeStringAsync(null, "descr", null, description);
+            xml.WriteAttributeString(null, "descr", null, description);
         }
 
         if (link is not null)
         {
-            await xml.WriteStartElementAsync("a", "hlinkClick", Main);
-            await xml.WriteAttributeStringAsync("r", "id", OpcNamespaces.Relationships, context.Link(link));
+            xml.WriteStartElement("a", "hlinkClick", Main);
+            xml.WriteAttributeString("r", "id", OpcNamespaces.Relationships, context.Link(link));
 
             if (link.Tooltip is not null)
             {
-                await xml.WriteAttributeStringAsync(null, "tooltip", null, link.Tooltip);
+                xml.WriteAttributeString(null, "tooltip", null, link.Tooltip);
             }
 
             if (link.Action is not null)
             {
-                await xml.WriteAttributeStringAsync(null, "action", null, link.Action);
+                xml.WriteAttributeString(null, "action", null, link.Action);
             }
 
-            await xml.WriteEndElementAsync();
+            xml.WriteEndElement();
         }
 
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
     }
 
-    private static async Task WriteApplicationPropertiesAsync(XmlWriter xml, ShapeTreeNamespace tree)
+    private static void WriteApplicationProperties(XmlWriter xml, ShapeTreeNamespace tree)
     {
         if (tree.ApplicationProperties == true)
         {
-            await xml.WriteElementStringAsync(tree.Prefix, "nvPr", tree.Uri, string.Empty);
+            xml.WriteElementString(tree.Prefix, "nvPr", tree.Uri, string.Empty);
         }
     }
 
-    private static async Task WriteShadowAttributesAsync(XmlWriter xml, Shadow shadow)
+    private static void WriteShadowAttributes(XmlWriter xml, Shadow shadow)
     {
-        await xml.WriteAttributeStringAsync(null, "blurRad", null, DrawingValues.Text(DrawingValues.Emu(shadow.Blur)));
-        await xml.WriteAttributeStringAsync(null, "dist", null, DrawingValues.Text(DrawingValues.Emu(shadow.Distance)));
-        await xml.WriteAttributeStringAsync(null, "dir", null, DrawingValues.Text(DrawingValues.Angle(shadow.Angle)));
+        xml.WriteAttributeString(null, "blurRad", null, DrawingValues.Text(DrawingValues.Emu(shadow.Blur)));
+        xml.WriteAttributeString(null, "dist", null, DrawingValues.Text(DrawingValues.Emu(shadow.Distance)));
+        xml.WriteAttributeString(null, "dir", null, DrawingValues.Text(DrawingValues.Angle(shadow.Angle)));
     }
 
     /// <summary>An a:srgbClr, with an a:alpha when the colour is see-through.</summary>
-    private static async Task WriteColorAsync(XmlWriter xml, string color, double transparency)
+    private static void WriteColor(XmlWriter xml, string color, double transparency)
     {
-        await xml.WriteStartElementAsync("a", "srgbClr", Main);
-        await xml.WriteAttributeStringAsync(null, "val", null, color[1..]);
+        xml.WriteStartElement("a", "srgbClr", Main);
+        xml.WriteAttributeString(null, "val", null, color[1..]);
 
         if (transparency > 0)
         {
-            await xml.WriteStartElementAsync("a", "alpha", Main);
-            await xml.WriteAttributeStringAsync(null, "val", null, DrawingValues.Text(DrawingValues.Percent(1 - transparency)));
-            await xml.WriteEndElementAsync();
+            xml.WriteStartElement("a", "alpha", Main);
+            xml.WriteAttributeString(null, "val", null, DrawingValues.Text(DrawingValues.Percent(1 - transparency)));
+            xml.WriteEndElement();
         }
 
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
     }
 }

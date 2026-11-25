@@ -7,7 +7,7 @@ namespace Avig.OpenXml.Drawing;
 /// which Office checks: a misplaced one makes it repair the file. The series' formulas are written
 /// as they are given; what they point to is up to the package that owns the chart.
 /// </summary>
-public static class ChartWriter
+public static partial class ChartWriter
 {
     private const string ChartUri = OpcNamespaces.DrawingChart;
     private const string DrawingUri = OpcNamespaces.DrawingMain;
@@ -20,41 +20,40 @@ public static class ChartWriter
     /// <summary>A complete chart part, from the XML declaration on. Call <see cref="ChartSpace.Validate"/> first.</summary>
     /// <param name="xml">The writer of the part.</param>
     /// <param name="chart">The chart.</param>
-    /// <returns>A task.</returns>
-    public static async Task WriteChartSpaceAsync(XmlWriter xml, ChartSpace chart)
+    public static void WriteChartSpace(XmlWriter xml, ChartSpace chart)
     {
         ArgumentNullException.ThrowIfNull(xml);
         ArgumentNullException.ThrowIfNull(chart);
-        await xml.WriteStartDocumentAsync(true);
-        await xml.WriteStartElementAsync("c", "chartSpace", ChartUri);
-        await xml.WriteAttributeStringAsync("xmlns", "a", null, DrawingUri);
-        await xml.WriteAttributeStringAsync("xmlns", "r", null, OpcNamespaces.Relationships);
+        xml.WriteStartDocument(true);
+        xml.WriteStartElement("c", "chartSpace", ChartUri);
+        xml.WriteAttributeString("xmlns", "a", null, DrawingUri);
+        xml.WriteAttributeString("xmlns", "r", null, OpcNamespaces.Relationships);
 
         // Written always: the schema's default (rounded) is the opposite of Excel's.
-        await WriteValueAsync(xml, "roundedCorners", Flag(chart.RoundedCorners));
-        await xml.WriteStartElementAsync("c", "chart", ChartUri);
+        WriteValue(xml, "roundedCorners", Flag(chart.RoundedCorners));
+        xml.WriteStartElement("c", "chart", ChartUri);
 
         if (chart.Title is not null)
         {
-            await WriteTitleAsync(xml, chart.Title, false, chart.TitleFont);
-            await WriteValueAsync(xml, "autoTitleDeleted", "0");
+            WriteTitle(xml, chart.Title, false, chart.TitleFont);
+            WriteValue(xml, "autoTitleDeleted", "0");
         }
         else
         {
             // Otherwise Excel shows the name of a lone series as the title.
-            await WriteValueAsync(xml, "autoTitleDeleted", "1");
+            WriteValue(xml, "autoTitleDeleted", "1");
         }
 
-        await xml.WriteStartElementAsync("c", "plotArea", ChartUri);
-        await xml.WriteElementStringAsync("c", "layout", ChartUri, string.Empty);
+        xml.WriteStartElement("c", "plotArea", ChartUri);
+        xml.WriteElementString("c", "layout", ChartUri, string.Empty);
         List<SeriesGroup> groups = Groups(chart);
 
         foreach (SeriesGroup group in groups)
         {
-            await WriteGroupAsync(xml, chart, group);
+            WriteGroup(xml, chart, group);
         }
 
-        await WriteAxesAsync(xml, chart, groups.Exists(group => group.Secondary == true));
+        WriteAxes(xml, chart, groups.Exists(group => group.Secondary == true));
 
         // Excel paints a plot area without its own fill white, which would hide a background.
         Fill? plotFill = chart.PlotBackground;
@@ -66,46 +65,46 @@ public static class ChartWriter
 
         if (plotFill is not null)
         {
-            await xml.WriteStartElementAsync("c", "spPr", ChartUri);
-            await DrawingWriter.WriteFillAsync(xml, plotFill);
-            await xml.WriteEndElementAsync();
+            xml.WriteStartElement("c", "spPr", ChartUri);
+            DrawingWriter.WriteFill(xml, plotFill);
+            xml.WriteEndElement();
         }
 
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
 
         if (chart.Legend != LegendPosition.None)
         {
-            await xml.WriteStartElementAsync("c", "legend", ChartUri);
-            await WriteValueAsync(xml, "legendPos", LegendName(chart.Legend));
-            await WriteValueAsync(xml, "overlay", "0");
-            await WriteTextPropertiesAsync(xml, chart.LegendFont);
-            await xml.WriteEndElementAsync();
+            xml.WriteStartElement("c", "legend", ChartUri);
+            WriteValue(xml, "legendPos", LegendName(chart.Legend));
+            WriteValue(xml, "overlay", "0");
+            WriteTextProperties(xml, chart.LegendFont);
+            xml.WriteEndElement();
         }
 
-        await WriteValueAsync(xml, "plotVisOnly", "1");
-        await WriteValueAsync(xml, "dispBlanksAs", "gap");
-        await xml.WriteEndElementAsync();
+        WriteValue(xml, "plotVisOnly", "1");
+        WriteValue(xml, "dispBlanksAs", "gap");
+        xml.WriteEndElement();
 
         if (chart.Background is not null || chart.Border is not null)
         {
-            await xml.WriteStartElementAsync("c", "spPr", ChartUri);
+            xml.WriteStartElement("c", "spPr", ChartUri);
 
             if (chart.Background is not null)
             {
-                await DrawingWriter.WriteFillAsync(xml, chart.Background);
+                DrawingWriter.WriteFill(xml, chart.Background);
             }
 
             if (chart.Border is not null)
             {
-                await DrawingWriter.WriteOutlineAsync(xml, chart.Border);
+                DrawingWriter.WriteOutline(xml, chart.Border);
             }
 
-            await xml.WriteEndElementAsync();
+            xml.WriteEndElement();
         }
 
-        await WriteTextPropertiesAsync(xml, chart.Font);
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndDocumentAsync();
+        WriteTextProperties(xml, chart.Font);
+        xml.WriteEndElement();
+        xml.WriteEndDocument();
     }
 
     /// <summary>One plot element (barChart, lineChart ...): the series of one type on one axis.</summary>
@@ -149,7 +148,7 @@ public static class ChartWriter
         };
     }
 
-    private static async Task WriteGroupAsync(XmlWriter xml, ChartSpace chart, SeriesGroup group)
+    private static void WriteGroup(XmlWriter xml, ChartSpace chart, SeriesGroup group)
     {
         // Stacking applies to the chart's own type; series drawn as another type stand alone.
         bool stacked = chart.Stacked == true && group.Type == chart.Type;
@@ -159,91 +158,91 @@ public static class ChartWriter
         switch (group.Type)
         {
             case ChartType.Column or ChartType.Bar:
-                await xml.WriteStartElementAsync("c", "barChart", ChartUri);
+                xml.WriteStartElement("c", "barChart", ChartUri);
 
                 if (group.Type == ChartType.Bar)
                 {
-                    await WriteValueAsync(xml, "barDir", "bar");
+                    WriteValue(xml, "barDir", "bar");
                 }
                 else
                 {
-                    await WriteValueAsync(xml, "barDir", "col");
+                    WriteValue(xml, "barDir", "col");
                 }
 
                 if (stacked == true)
                 {
-                    await WriteValueAsync(xml, "grouping", "stacked");
+                    WriteValue(xml, "grouping", "stacked");
                 }
                 else
                 {
-                    await WriteValueAsync(xml, "grouping", "clustered");
+                    WriteValue(xml, "grouping", "clustered");
                 }
 
-                await WriteValueAsync(xml, "varyColors", varyColors);
-                await WriteSeriesAsync(xml, chart, group);
-                await WriteValueAsync(xml, "gapWidth", DrawingValues.Text(chart.GapWidth ?? 150));
+                WriteValue(xml, "varyColors", varyColors);
+                WriteSeries(xml, chart, group);
+                WriteValue(xml, "gapWidth", DrawingValues.Text(chart.GapWidth ?? 150));
 
                 if (chart.Overlap is int overlap)
                 {
-                    await WriteValueAsync(xml, "overlap", DrawingValues.Text(overlap));
+                    WriteValue(xml, "overlap", DrawingValues.Text(overlap));
                 }
                 else if (stacked == true)
                 {
-                    await WriteValueAsync(xml, "overlap", "100");
+                    WriteValue(xml, "overlap", "100");
                 }
 
-                await WriteAxisIdsAsync(xml, group.Secondary);
-                await xml.WriteEndElementAsync();
+                WriteAxisIds(xml, group.Secondary);
+                xml.WriteEndElement();
 
                 break;
 
             case ChartType.Line:
-                await xml.WriteStartElementAsync("c", "lineChart", ChartUri);
-                await WriteValueAsync(xml, "grouping", Grouping(stacked));
-                await WriteValueAsync(xml, "varyColors", varyColors);
-                await WriteSeriesAsync(xml, chart, group);
-                await WriteValueAsync(xml, "marker", "1");
-                await WriteAxisIdsAsync(xml, group.Secondary);
-                await xml.WriteEndElementAsync();
+                xml.WriteStartElement("c", "lineChart", ChartUri);
+                WriteValue(xml, "grouping", Grouping(stacked));
+                WriteValue(xml, "varyColors", varyColors);
+                WriteSeries(xml, chart, group);
+                WriteValue(xml, "marker", "1");
+                WriteAxisIds(xml, group.Secondary);
+                xml.WriteEndElement();
 
                 break;
 
             case ChartType.Area:
-                await xml.WriteStartElementAsync("c", "areaChart", ChartUri);
-                await WriteValueAsync(xml, "grouping", Grouping(stacked));
-                await WriteValueAsync(xml, "varyColors", varyColors);
-                await WriteSeriesAsync(xml, chart, group);
-                await WriteAxisIdsAsync(xml, group.Secondary);
-                await xml.WriteEndElementAsync();
+                xml.WriteStartElement("c", "areaChart", ChartUri);
+                WriteValue(xml, "grouping", Grouping(stacked));
+                WriteValue(xml, "varyColors", varyColors);
+                WriteSeries(xml, chart, group);
+                WriteAxisIds(xml, group.Secondary);
+                xml.WriteEndElement();
 
                 break;
 
             case ChartType.Pie:
-                await xml.WriteStartElementAsync("c", "pieChart", ChartUri);
-                await WriteValueAsync(xml, "varyColors", varyColors);
-                await WriteSeriesAsync(xml, chart, group);
-                await WriteValueAsync(xml, "firstSliceAng", DrawingValues.Text(chart.FirstSliceAngle));
-                await xml.WriteEndElementAsync();
+                xml.WriteStartElement("c", "pieChart", ChartUri);
+                WriteValue(xml, "varyColors", varyColors);
+                WriteSeries(xml, chart, group);
+                WriteValue(xml, "firstSliceAng", DrawingValues.Text(chart.FirstSliceAngle));
+                xml.WriteEndElement();
 
                 break;
 
             case ChartType.Doughnut:
-                await xml.WriteStartElementAsync("c", "doughnutChart", ChartUri);
-                await WriteValueAsync(xml, "varyColors", varyColors);
-                await WriteSeriesAsync(xml, chart, group);
-                await WriteValueAsync(xml, "firstSliceAng", DrawingValues.Text(chart.FirstSliceAngle));
-                await WriteValueAsync(xml, "holeSize", DrawingValues.Text(chart.HoleSize ?? 50));
-                await xml.WriteEndElementAsync();
+                xml.WriteStartElement("c", "doughnutChart", ChartUri);
+                WriteValue(xml, "varyColors", varyColors);
+                WriteSeries(xml, chart, group);
+                WriteValue(xml, "firstSliceAng", DrawingValues.Text(chart.FirstSliceAngle));
+                WriteValue(xml, "holeSize", DrawingValues.Text(chart.HoleSize ?? 50));
+                xml.WriteEndElement();
 
                 break;
 
             default:
-                await xml.WriteStartElementAsync("c", "scatterChart", ChartUri);
-                await WriteValueAsync(xml, "scatterStyle", "lineMarker");
-                await WriteValueAsync(xml, "varyColors", varyColors);
-                await WriteSeriesAsync(xml, chart, group);
-                await WriteAxisIdsAsync(xml, group.Secondary);
-                await xml.WriteEndElementAsync();
+                xml.WriteStartElement("c", "scatterChart", ChartUri);
+                WriteValue(xml, "scatterStyle", "lineMarker");
+                WriteValue(xml, "varyColors", varyColors);
+                WriteSeries(xml, chart, group);
+                WriteAxisIds(xml, group.Secondary);
+                xml.WriteEndElement();
 
                 break;
         }
@@ -260,7 +259,7 @@ public static class ChartWriter
     }
 
     /// <summary>The series, each with its children in the order its type's schema gives.</summary>
-    private static async Task WriteSeriesAsync(XmlWriter xml, ChartSpace chart, SeriesGroup group)
+    private static void WriteSeries(XmlWriter xml, ChartSpace chart, SeriesGroup group)
     {
         ChartType type = group.Type;
         bool pie = type is ChartType.Pie or ChartType.Doughnut;
@@ -269,29 +268,29 @@ public static class ChartWriter
 
         foreach ((int index, ChartSpaceSeries series) in group.Members)
         {
-            await xml.WriteStartElementAsync("c", "ser", ChartUri);
-            await WriteValueAsync(xml, "idx", DrawingValues.Text(index));
-            await WriteValueAsync(xml, "order", DrawingValues.Text(index));
+            xml.WriteStartElement("c", "ser", ChartUri);
+            WriteValue(xml, "idx", DrawingValues.Text(index));
+            WriteValue(xml, "order", DrawingValues.Text(index));
 
             if (series.NameFormula is not null)
             {
-                await xml.WriteStartElementAsync("c", "tx", ChartUri);
-                await xml.WriteStartElementAsync("c", "strRef", ChartUri);
-                await xml.WriteElementStringAsync("c", "f", ChartUri, series.NameFormula);
+                xml.WriteStartElement("c", "tx", ChartUri);
+                xml.WriteStartElement("c", "strRef", ChartUri);
+                xml.WriteElementString("c", "f", ChartUri, series.NameFormula);
 
                 if (series.Name is not null)
                 {
-                    await WritePointsAsync(xml, true, "strCache", null, 1, [series.Name]);
+                    WritePoints(xml, true, "strCache", null, 1, [series.Name]);
                 }
 
-                await xml.WriteEndElementAsync();
-                await xml.WriteEndElementAsync();
+                xml.WriteEndElement();
+                xml.WriteEndElement();
             }
             else if (series.Name is not null)
             {
-                await xml.WriteStartElementAsync("c", "tx", ChartUri);
-                await xml.WriteElementStringAsync("c", "v", ChartUri, series.Name);
-                await xml.WriteEndElementAsync();
+                xml.WriteStartElement("c", "tx", ChartUri);
+                xml.WriteElementString("c", "v", ChartUri, series.Name);
+                xml.WriteEndElement();
             }
 
             // A pie colours each slice, so one colour for the whole series would hide them,
@@ -303,61 +302,61 @@ public static class ChartWriter
                 color = null;
             }
 
-            await WriteSeriesShapeAsync(xml, type, series, color);
+            WriteSeriesShape(xml, type, series, color);
 
             if (lines == true)
             {
-                await WriteMarkerAsync(xml, series, color ?? series.Outline?.Color);
+                WriteMarker(xml, series, color ?? series.Outline?.Color);
             }
 
             if (bars == true)
             {
-                await WriteValueAsync(xml, "invertIfNegative", "0");
+                WriteValue(xml, "invertIfNegative", "0");
             }
 
             for (int point = 0; point < series.PointColors.Count; point++)
             {
                 if (series.PointColors[point] is string pointColor)
                 {
-                    await WritePointAsync(xml, type, point, pointColor, series);
+                    WritePoint(xml, type, point, pointColor, series);
                 }
             }
 
             if ((series.DataLabels ?? chart.DataLabels) is DataLabels labels)
             {
-                await WriteDataLabelsAsync(xml, labels);
+                WriteDataLabels(xml, labels);
             }
 
             if (type == ChartType.Scatter)
             {
                 if (series.Categories is not null)
                 {
-                    await WriteReferenceAsync(xml, "xVal", true, series.Categories);
+                    WriteReference(xml, "xVal", true, series.Categories);
                 }
 
-                await WriteReferenceAsync(xml, "yVal", true, series.Values);
+                WriteReference(xml, "yVal", true, series.Values);
             }
             else
             {
                 if (series.Categories is not null)
                 {
-                    await WriteReferenceAsync(xml, "cat", false, series.Categories);
+                    WriteReference(xml, "cat", false, series.Categories);
                 }
 
-                await WriteReferenceAsync(xml, "val", true, series.Values);
+                WriteReference(xml, "val", true, series.Values);
             }
 
             if (lines == true)
             {
-                await WriteValueAsync(xml, "smooth", Flag(series.Smooth));
+                WriteValue(xml, "smooth", Flag(series.Smooth));
             }
 
-            await xml.WriteEndElementAsync();
+            xml.WriteEndElement();
         }
     }
 
     /// <summary>The series' c:spPr: the fill, line and shadow its type uses, when any is set.</summary>
-    private static async Task WriteSeriesShapeAsync(XmlWriter xml, ChartType type, ChartSpaceSeries series, string? color)
+    private static void WriteSeriesShape(XmlWriter xml, ChartType type, ChartSpaceSeries series, string? color)
     {
         Fill? fill = null;
         Outline? outline = series.Outline;
@@ -390,11 +389,11 @@ public static class ChartWriter
             return;
         }
 
-        await xml.WriteStartElementAsync("c", "spPr", ChartUri);
+        xml.WriteStartElement("c", "spPr", ChartUri);
 
         if (fill is not null)
         {
-            await DrawingWriter.WriteFillAsync(xml, fill);
+            DrawingWriter.WriteFill(xml, fill);
         }
 
         if (outline is not null)
@@ -402,50 +401,50 @@ public static class ChartWriter
             if (type == ChartType.Scatter && outline.Color is null)
             {
                 // As Excel writes a scatter series without lines.
-                await xml.WriteStartElementAsync("a", "ln", DrawingUri);
-                await xml.WriteAttributeStringAsync(null, "w", null, "19050");
-                await xml.WriteElementStringAsync("a", "noFill", DrawingUri, string.Empty);
-                await xml.WriteEndElementAsync();
+                xml.WriteStartElement("a", "ln", DrawingUri);
+                xml.WriteAttributeString(null, "w", null, "19050");
+                xml.WriteElementString("a", "noFill", DrawingUri, string.Empty);
+                xml.WriteEndElement();
             }
             else
             {
-                await DrawingWriter.WriteOutlineAsync(xml, outline);
+                DrawingWriter.WriteOutline(xml, outline);
             }
         }
 
         if (series.Shadow is not null)
         {
-            await DrawingWriter.WriteEffectsAsync(xml, series.Shadow, null, null);
+            DrawingWriter.WriteEffects(xml, series.Shadow, null, null);
         }
 
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
     }
 
-    private static async Task WriteMarkerAsync(XmlWriter xml, ChartSpaceSeries series, string? color)
+    private static void WriteMarker(XmlWriter xml, ChartSpaceSeries series, string? color)
     {
         if (series.Marker is null && series.MarkerSize is null && color is null)
         {
             return;
         }
 
-        await xml.WriteStartElementAsync("c", "marker", ChartUri);
+        xml.WriteStartElement("c", "marker", ChartUri);
         MarkerStyle style = series.Marker ?? MarkerStyle.Circle;
-        await WriteValueAsync(xml, "symbol", MarkerName(style));
+        WriteValue(xml, "symbol", MarkerName(style));
 
         if (style != MarkerStyle.None)
         {
-            await WriteValueAsync(xml, "size", DrawingValues.Text(series.MarkerSize ?? 5));
+            WriteValue(xml, "size", DrawingValues.Text(series.MarkerSize ?? 5));
 
             if (color is not null)
             {
-                await xml.WriteStartElementAsync("c", "spPr", ChartUri);
-                await DrawingWriter.WriteFillAsync(xml, Fill.Solid(color));
-                await DrawingWriter.WriteOutlineAsync(xml, new Outline(color, 0.75));
-                await xml.WriteEndElementAsync();
+                xml.WriteStartElement("c", "spPr", ChartUri);
+                DrawingWriter.WriteFill(xml, Fill.Solid(color));
+                DrawingWriter.WriteOutline(xml, new Outline(color, 0.75));
+                xml.WriteEndElement();
             }
         }
 
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
     }
 
     private static string MarkerName(MarkerStyle style)
@@ -466,76 +465,76 @@ public static class ChartWriter
     }
 
     /// <summary>A c:dPt that gives one point its own colour.</summary>
-    private static async Task WritePointAsync(XmlWriter xml, ChartType type, int point, string color, ChartSpaceSeries series)
+    private static void WritePoint(XmlWriter xml, ChartType type, int point, string color, ChartSpaceSeries series)
     {
-        await xml.WriteStartElementAsync("c", "dPt", ChartUri);
-        await WriteValueAsync(xml, "idx", DrawingValues.Text(point));
+        xml.WriteStartElement("c", "dPt", ChartUri);
+        WriteValue(xml, "idx", DrawingValues.Text(point));
 
         if (type is ChartType.Column or ChartType.Bar)
         {
-            await WriteValueAsync(xml, "invertIfNegative", "0");
+            WriteValue(xml, "invertIfNegative", "0");
         }
 
-        await WriteValueAsync(xml, "bubble3D", "0");
-        await xml.WriteStartElementAsync("c", "spPr", ChartUri);
+        WriteValue(xml, "bubble3D", "0");
+        xml.WriteStartElement("c", "spPr", ChartUri);
 
         if (type is ChartType.Line or ChartType.Scatter)
         {
             double width = series.Outline?.Width ?? 2.25;
-            await DrawingWriter.WriteOutlineAsync(xml, new Outline(color, width));
+            DrawingWriter.WriteOutline(xml, new Outline(color, width));
         }
         else
         {
-            await DrawingWriter.WriteFillAsync(xml, Fill.Solid(color));
+            DrawingWriter.WriteFill(xml, Fill.Solid(color));
 
             if (series.Outline is not null)
             {
-                await DrawingWriter.WriteOutlineAsync(xml, series.Outline);
+                DrawingWriter.WriteOutline(xml, series.Outline);
             }
         }
 
         if (series.Shadow is not null)
         {
-            await DrawingWriter.WriteEffectsAsync(xml, series.Shadow, null, null);
+            DrawingWriter.WriteEffects(xml, series.Shadow, null, null);
         }
 
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
+        xml.WriteEndElement();
     }
 
-    private static async Task WriteDataLabelsAsync(XmlWriter xml, DataLabels labels)
+    private static void WriteDataLabels(XmlWriter xml, DataLabels labels)
     {
-        await xml.WriteStartElementAsync("c", "dLbls", ChartUri);
+        xml.WriteStartElement("c", "dLbls", ChartUri);
 
         if (labels.NumberFormat is not null)
         {
-            await xml.WriteStartElementAsync("c", "numFmt", ChartUri);
-            await xml.WriteAttributeStringAsync(null, "formatCode", null, labels.NumberFormat);
-            await xml.WriteAttributeStringAsync(null, "sourceLinked", null, "0");
-            await xml.WriteEndElementAsync();
+            xml.WriteStartElement("c", "numFmt", ChartUri);
+            xml.WriteAttributeString(null, "formatCode", null, labels.NumberFormat);
+            xml.WriteAttributeString(null, "sourceLinked", null, "0");
+            xml.WriteEndElement();
         }
 
         // Excel's own labels have no box around them.
-        await xml.WriteStartElementAsync("c", "spPr", ChartUri);
-        await xml.WriteElementStringAsync("a", "noFill", DrawingUri, string.Empty);
-        await xml.WriteStartElementAsync("a", "ln", DrawingUri);
-        await xml.WriteElementStringAsync("a", "noFill", DrawingUri, string.Empty);
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
-        await WriteTextPropertiesAsync(xml, labels.Font);
+        xml.WriteStartElement("c", "spPr", ChartUri);
+        xml.WriteElementString("a", "noFill", DrawingUri, string.Empty);
+        xml.WriteStartElement("a", "ln", DrawingUri);
+        xml.WriteElementString("a", "noFill", DrawingUri, string.Empty);
+        xml.WriteEndElement();
+        xml.WriteEndElement();
+        WriteTextProperties(xml, labels.Font);
 
         if (labels.Position != DataLabelPosition.Default)
         {
-            await WriteValueAsync(xml, "dLblPos", PositionName(labels.Position));
+            WriteValue(xml, "dLblPos", PositionName(labels.Position));
         }
 
-        await WriteValueAsync(xml, "showLegendKey", "0");
-        await WriteValueAsync(xml, "showVal", Flag(labels.ShowValue));
-        await WriteValueAsync(xml, "showCatName", Flag(labels.ShowCategory));
-        await WriteValueAsync(xml, "showSerName", Flag(labels.ShowSeriesName));
-        await WriteValueAsync(xml, "showPercent", Flag(labels.ShowPercent));
-        await WriteValueAsync(xml, "showBubbleSize", "0");
-        await xml.WriteEndElementAsync();
+        WriteValue(xml, "showLegendKey", "0");
+        WriteValue(xml, "showVal", Flag(labels.ShowValue));
+        WriteValue(xml, "showCatName", Flag(labels.ShowCategory));
+        WriteValue(xml, "showSerName", Flag(labels.ShowSeriesName));
+        WriteValue(xml, "showPercent", Flag(labels.ShowPercent));
+        WriteValue(xml, "showBubbleSize", "0");
+        xml.WriteEndElement();
     }
 
     private static string PositionName(DataLabelPosition position)
@@ -554,7 +553,7 @@ public static class ChartWriter
         };
     }
 
-    private static async Task WriteAxesAsync(XmlWriter xml, ChartSpace chart, bool secondary)
+    private static void WriteAxes(XmlWriter xml, ChartSpace chart, bool secondary)
     {
         if (chart.Type is ChartType.Pie or ChartType.Doughnut)
         {
@@ -575,233 +574,233 @@ public static class ChartWriter
         if (chart.Type == ChartType.Scatter)
         {
             // Two value axes: x along the bottom, y up the side.
-            await WriteValueAxisAsync(xml, new AxisPlace(CategoryAxisId, ValueAxisId, "b", "midCat", false), chart.CategoryAxisTitle, categoryAxis, false);
-            await WriteValueAxisAsync(xml, new AxisPlace(ValueAxisId, CategoryAxisId, "l", "midCat", false), chart.ValueAxisTitle, valueAxis, true);
+            WriteValueAxis(xml, new AxisPlace(CategoryAxisId, ValueAxisId, "b", "midCat", false), chart.CategoryAxisTitle, categoryAxis, false);
+            WriteValueAxis(xml, new AxisPlace(ValueAxisId, CategoryAxisId, "l", "midCat", false), chart.ValueAxisTitle, valueAxis, true);
 
             return;
         }
 
-        await WriteCategoryAxisAsync(xml, CategoryAxisId, ValueAxisId, categoryPosition, chart.CategoryAxisTitle, categoryAxis);
-        await WriteValueAxisAsync(xml, new AxisPlace(ValueAxisId, CategoryAxisId, valuePosition, "between", false), chart.ValueAxisTitle, valueAxis, true);
+        WriteCategoryAxis(xml, CategoryAxisId, ValueAxisId, categoryPosition, chart.CategoryAxisTitle, categoryAxis);
+        WriteValueAxis(xml, new AxisPlace(ValueAxisId, CategoryAxisId, valuePosition, "between", false), chart.ValueAxisTitle, valueAxis, true);
 
         if (secondary == true)
         {
             // The secondary series share the categories, so their own category axis is hidden;
             // their value axis sits on the right, crossing at the far end.
-            await WriteCategoryAxisAsync(xml, SecondaryCategoryAxisId, SecondaryValueAxisId, "b", null, new ChartAxis { Visible = false });
-            await WriteValueAxisAsync(xml, new AxisPlace(SecondaryValueAxisId, SecondaryCategoryAxisId, "r", "between", true), null, chart.SecondaryValueAxis ?? new ChartAxis(), false);
+            WriteCategoryAxis(xml, SecondaryCategoryAxisId, SecondaryValueAxisId, "b", null, new ChartAxis { Visible = false });
+            WriteValueAxis(xml, new AxisPlace(SecondaryValueAxisId, SecondaryCategoryAxisId, "r", "between", true), null, chart.SecondaryValueAxis ?? new ChartAxis(), false);
         }
     }
 
-    private static async Task WriteCategoryAxisAsync(XmlWriter xml, string id, string crossing, string position, string? title, ChartAxis axis)
+    private static void WriteCategoryAxis(XmlWriter xml, string id, string crossing, string position, string? title, ChartAxis axis)
     {
-        await xml.WriteStartElementAsync("c", "catAx", ChartUri);
-        await WriteValueAsync(xml, "axId", id);
-        await WriteScalingAsync(xml, axis, false);
-        await WriteValueAsync(xml, "delete", Flag(axis.Visible == false));
-        await WriteValueAsync(xml, "axPos", position);
-        await WriteGridlinesAsync(xml, axis, false);
+        xml.WriteStartElement("c", "catAx", ChartUri);
+        WriteValue(xml, "axId", id);
+        WriteScaling(xml, axis, false);
+        WriteValue(xml, "delete", Flag(axis.Visible == false));
+        WriteValue(xml, "axPos", position);
+        WriteGridlines(xml, axis, false);
 
         if (title is not null)
         {
-            await WriteTitleAsync(xml, title, false, null);
+            WriteTitle(xml, title, false, null);
         }
 
         if (axis.NumberFormat is not null)
         {
-            await WriteNumberFormatAsync(xml, axis.NumberFormat, false);
+            WriteNumberFormat(xml, axis.NumberFormat, false);
         }
 
-        await WriteValueAsync(xml, "majorTickMark", "out");
-        await WriteValueAsync(xml, "minorTickMark", "none");
-        await WriteValueAsync(xml, "tickLblPos", "nextTo");
-        await WriteAxisShapeAsync(xml, axis);
-        await WriteTextPropertiesAsync(xml, axis.Font);
-        await WriteValueAsync(xml, "crossAx", crossing);
-        await WriteValueAsync(xml, "crosses", "autoZero");
-        await WriteValueAsync(xml, "auto", "1");
-        await WriteValueAsync(xml, "lblAlgn", "ctr");
-        await WriteValueAsync(xml, "lblOffset", "100");
-        await WriteValueAsync(xml, "noMultiLvlLbl", "0");
-        await xml.WriteEndElementAsync();
+        WriteValue(xml, "majorTickMark", "out");
+        WriteValue(xml, "minorTickMark", "none");
+        WriteValue(xml, "tickLblPos", "nextTo");
+        WriteAxisShape(xml, axis);
+        WriteTextProperties(xml, axis.Font);
+        WriteValue(xml, "crossAx", crossing);
+        WriteValue(xml, "crosses", "autoZero");
+        WriteValue(xml, "auto", "1");
+        WriteValue(xml, "lblAlgn", "ctr");
+        WriteValue(xml, "lblOffset", "100");
+        WriteValue(xml, "noMultiLvlLbl", "0");
+        xml.WriteEndElement();
     }
 
     /// <summary>Where a value axis sits: its id, the axis it crosses, its side, how it meets the categories, and whether it crosses at the far end.</summary>
     private readonly record struct AxisPlace(string Id, string Crossing, string Position, string CrossBetween, bool CrossesAtMaximum);
 
-    private static async Task WriteValueAxisAsync(XmlWriter xml, AxisPlace place, string? title, ChartAxis axis, bool gridlines)
+    private static void WriteValueAxis(XmlWriter xml, AxisPlace place, string? title, ChartAxis axis, bool gridlines)
     {
-        await xml.WriteStartElementAsync("c", "valAx", ChartUri);
-        await WriteValueAsync(xml, "axId", place.Id);
-        await WriteScalingAsync(xml, axis, true);
-        await WriteValueAsync(xml, "delete", Flag(axis.Visible == false));
-        await WriteValueAsync(xml, "axPos", place.Position);
-        await WriteGridlinesAsync(xml, axis, gridlines);
+        xml.WriteStartElement("c", "valAx", ChartUri);
+        WriteValue(xml, "axId", place.Id);
+        WriteScaling(xml, axis, true);
+        WriteValue(xml, "delete", Flag(axis.Visible == false));
+        WriteValue(xml, "axPos", place.Position);
+        WriteGridlines(xml, axis, gridlines);
 
         if (title is not null)
         {
-            await WriteTitleAsync(xml, title, place.Position is "l" or "r", null);
+            WriteTitle(xml, title, place.Position is "l" or "r", null);
         }
 
-        await WriteNumberFormatAsync(xml, axis.NumberFormat ?? "General", axis.NumberFormat is null);
-        await WriteValueAsync(xml, "majorTickMark", "out");
-        await WriteValueAsync(xml, "minorTickMark", "none");
-        await WriteValueAsync(xml, "tickLblPos", "nextTo");
-        await WriteAxisShapeAsync(xml, axis);
-        await WriteTextPropertiesAsync(xml, axis.Font);
-        await WriteValueAsync(xml, "crossAx", place.Crossing);
+        WriteNumberFormat(xml, axis.NumberFormat ?? "General", axis.NumberFormat is null);
+        WriteValue(xml, "majorTickMark", "out");
+        WriteValue(xml, "minorTickMark", "none");
+        WriteValue(xml, "tickLblPos", "nextTo");
+        WriteAxisShape(xml, axis);
+        WriteTextProperties(xml, axis.Font);
+        WriteValue(xml, "crossAx", place.Crossing);
 
         if (place.CrossesAtMaximum == true)
         {
-            await WriteValueAsync(xml, "crosses", "max");
+            WriteValue(xml, "crosses", "max");
         }
         else
         {
-            await WriteValueAsync(xml, "crosses", "autoZero");
+            WriteValue(xml, "crosses", "autoZero");
         }
 
-        await WriteValueAsync(xml, "crossBetween", place.CrossBetween);
+        WriteValue(xml, "crossBetween", place.CrossBetween);
 
         if (axis.MajorUnit is double unit)
         {
-            await WriteValueAsync(xml, "majorUnit", DrawingValues.Text(unit));
+            WriteValue(xml, "majorUnit", DrawingValues.Text(unit));
         }
 
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
     }
 
-    private static async Task WriteScalingAsync(XmlWriter xml, ChartAxis axis, bool values)
+    private static void WriteScaling(XmlWriter xml, ChartAxis axis, bool values)
     {
-        await xml.WriteStartElementAsync("c", "scaling", ChartUri);
-        await WriteValueAsync(xml, "orientation", "minMax");
+        xml.WriteStartElement("c", "scaling", ChartUri);
+        WriteValue(xml, "orientation", "minMax");
 
         if (values == true && axis.Maximum is double maximum)
         {
-            await WriteValueAsync(xml, "max", DrawingValues.Text(maximum));
+            WriteValue(xml, "max", DrawingValues.Text(maximum));
         }
 
         if (values == true && axis.Minimum is double minimum)
         {
-            await WriteValueAsync(xml, "min", DrawingValues.Text(minimum));
+            WriteValue(xml, "min", DrawingValues.Text(minimum));
         }
 
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
     }
 
-    private static async Task WriteGridlinesAsync(XmlWriter xml, ChartAxis axis, bool byDefault)
+    private static void WriteGridlines(XmlWriter xml, ChartAxis axis, bool byDefault)
     {
         if ((axis.Gridlines ?? byDefault) == false)
         {
             return;
         }
 
-        await xml.WriteStartElementAsync("c", "majorGridlines", ChartUri);
+        xml.WriteStartElement("c", "majorGridlines", ChartUri);
 
         if (axis.GridlineOutline is not null)
         {
-            await xml.WriteStartElementAsync("c", "spPr", ChartUri);
-            await DrawingWriter.WriteOutlineAsync(xml, axis.GridlineOutline);
-            await xml.WriteEndElementAsync();
+            xml.WriteStartElement("c", "spPr", ChartUri);
+            DrawingWriter.WriteOutline(xml, axis.GridlineOutline);
+            xml.WriteEndElement();
         }
 
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
     }
 
-    private static async Task WriteAxisShapeAsync(XmlWriter xml, ChartAxis axis)
+    private static void WriteAxisShape(XmlWriter xml, ChartAxis axis)
     {
         if (axis.Line is null)
         {
             return;
         }
 
-        await xml.WriteStartElementAsync("c", "spPr", ChartUri);
-        await DrawingWriter.WriteOutlineAsync(xml, axis.Line);
-        await xml.WriteEndElementAsync();
+        xml.WriteStartElement("c", "spPr", ChartUri);
+        DrawingWriter.WriteOutline(xml, axis.Line);
+        xml.WriteEndElement();
     }
 
-    private static async Task WriteNumberFormatAsync(XmlWriter xml, string format, bool sourceLinked)
+    private static void WriteNumberFormat(XmlWriter xml, string format, bool sourceLinked)
     {
-        await xml.WriteStartElementAsync("c", "numFmt", ChartUri);
-        await xml.WriteAttributeStringAsync(null, "formatCode", null, format);
-        await xml.WriteAttributeStringAsync(null, "sourceLinked", null, Flag(sourceLinked));
-        await xml.WriteEndElementAsync();
+        xml.WriteStartElement("c", "numFmt", ChartUri);
+        xml.WriteAttributeString(null, "formatCode", null, format);
+        xml.WriteAttributeString(null, "sourceLinked", null, Flag(sourceLinked));
+        xml.WriteEndElement();
     }
 
-    private static async Task WriteAxisIdsAsync(XmlWriter xml, bool secondary)
+    private static void WriteAxisIds(XmlWriter xml, bool secondary)
     {
         if (secondary == true)
         {
-            await WriteValueAsync(xml, "axId", SecondaryCategoryAxisId);
-            await WriteValueAsync(xml, "axId", SecondaryValueAxisId);
+            WriteValue(xml, "axId", SecondaryCategoryAxisId);
+            WriteValue(xml, "axId", SecondaryValueAxisId);
 
             return;
         }
 
-        await WriteValueAsync(xml, "axId", CategoryAxisId);
-        await WriteValueAsync(xml, "axId", ValueAxisId);
+        WriteValue(xml, "axId", CategoryAxisId);
+        WriteValue(xml, "axId", ValueAxisId);
     }
 
     /// <summary>A title with one run of text. <paramref name="vertical"/> turns it to read upwards, as Excel does beside a vertical axis.</summary>
-    private static async Task WriteTitleAsync(XmlWriter xml, string text, bool vertical, TextFont? font)
+    private static void WriteTitle(XmlWriter xml, string text, bool vertical, TextFont? font)
     {
-        await xml.WriteStartElementAsync("c", "title", ChartUri);
-        await xml.WriteStartElementAsync("c", "tx", ChartUri);
-        await xml.WriteStartElementAsync("c", "rich", ChartUri);
-        await xml.WriteStartElementAsync("a", "bodyPr", DrawingUri);
+        xml.WriteStartElement("c", "title", ChartUri);
+        xml.WriteStartElement("c", "tx", ChartUri);
+        xml.WriteStartElement("c", "rich", ChartUri);
+        xml.WriteStartElement("a", "bodyPr", DrawingUri);
 
         if (vertical == true)
         {
-            await xml.WriteAttributeStringAsync(null, "rot", null, "-5400000");
-            await xml.WriteAttributeStringAsync(null, "vert", null, "horz");
+            xml.WriteAttributeString(null, "rot", null, "-5400000");
+            xml.WriteAttributeString(null, "vert", null, "horz");
         }
 
-        await xml.WriteEndElementAsync();
-        await xml.WriteElementStringAsync("a", "lstStyle", DrawingUri, string.Empty);
-        await xml.WriteStartElementAsync("a", "p", DrawingUri);
+        xml.WriteEndElement();
+        xml.WriteElementString("a", "lstStyle", DrawingUri, string.Empty);
+        xml.WriteStartElement("a", "p", DrawingUri);
 
         if (font is not null)
         {
-            await xml.WriteStartElementAsync("a", "pPr", DrawingUri);
-            await DrawingWriter.WriteRunPropertiesAsync(xml, "defRPr", font);
-            await xml.WriteEndElementAsync();
+            xml.WriteStartElement("a", "pPr", DrawingUri);
+            DrawingWriter.WriteRunProperties(xml, "defRPr", font);
+            xml.WriteEndElement();
         }
 
-        await xml.WriteStartElementAsync("a", "r", DrawingUri);
+        xml.WriteStartElement("a", "r", DrawingUri);
 
         if (font is not null)
         {
-            await DrawingWriter.WriteRunPropertiesAsync(xml, "rPr", font);
+            DrawingWriter.WriteRunProperties(xml, "rPr", font);
         }
 
-        await xml.WriteElementStringAsync("a", "t", DrawingUri, text);
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
-        await WriteValueAsync(xml, "overlay", "0");
-        await xml.WriteEndElementAsync();
+        xml.WriteElementString("a", "t", DrawingUri, text);
+        xml.WriteEndElement();
+        xml.WriteEndElement();
+        xml.WriteEndElement();
+        xml.WriteEndElement();
+        WriteValue(xml, "overlay", "0");
+        xml.WriteEndElement();
     }
 
     /// <summary>A c:txPr: the default look of the text of the element it is in.</summary>
-    private static async Task WriteTextPropertiesAsync(XmlWriter xml, TextFont? font)
+    private static void WriteTextProperties(XmlWriter xml, TextFont? font)
     {
         if (font is null)
         {
             return;
         }
 
-        await xml.WriteStartElementAsync("c", "txPr", ChartUri);
-        await xml.WriteElementStringAsync("a", "bodyPr", DrawingUri, string.Empty);
-        await xml.WriteElementStringAsync("a", "lstStyle", DrawingUri, string.Empty);
-        await xml.WriteStartElementAsync("a", "p", DrawingUri);
-        await xml.WriteStartElementAsync("a", "pPr", DrawingUri);
-        await DrawingWriter.WriteRunPropertiesAsync(xml, "defRPr", font);
-        await xml.WriteEndElementAsync();
-        await xml.WriteStartElementAsync("a", "endParaRPr", DrawingUri);
-        await xml.WriteAttributeStringAsync(null, "lang", null, "en-US");
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
+        xml.WriteStartElement("c", "txPr", ChartUri);
+        xml.WriteElementString("a", "bodyPr", DrawingUri, string.Empty);
+        xml.WriteElementString("a", "lstStyle", DrawingUri, string.Empty);
+        xml.WriteStartElement("a", "p", DrawingUri);
+        xml.WriteStartElement("a", "pPr", DrawingUri);
+        DrawingWriter.WriteRunProperties(xml, "defRPr", font);
+        xml.WriteEndElement();
+        xml.WriteStartElement("a", "endParaRPr", DrawingUri);
+        xml.WriteAttributeString(null, "lang", null, "en-US");
+        xml.WriteEndElement();
+        xml.WriteEndElement();
+        xml.WriteEndElement();
     }
 
     /// <summary>
@@ -809,7 +808,7 @@ public static class ChartWriter
     /// numLit or strLit with values alone. <paramref name="numbers"/> is the kind the element
     /// takes when the data does not say; stored texts or numbers decide otherwise.
     /// </summary>
-    private static async Task WriteReferenceAsync(XmlWriter xml, string element, bool numbers, ChartData data)
+    private static void WriteReference(XmlWriter xml, string element, bool numbers, ChartData data)
     {
         if (data.Texts is not null && data.Numbers is null)
         {
@@ -828,56 +827,56 @@ public static class ChartWriter
             (false, false) => "strLit",
         };
 
-        await xml.WriteStartElementAsync("c", element, ChartUri);
-        await xml.WriteStartElementAsync("c", kind, ChartUri);
+        xml.WriteStartElement("c", element, ChartUri);
+        xml.WriteStartElement("c", kind, ChartUri);
 
         if (data.Formula is not null)
         {
-            await xml.WriteElementStringAsync("c", "f", ChartUri, data.Formula);
+            xml.WriteElementString("c", "f", ChartUri, data.Formula);
         }
 
         if (numbers == true && data.Numbers is not null)
         {
-            await WritePointsAsync(xml, data.Formula is not null, "numCache", data.FormatCode ?? "General", data.Numbers.Count, Numbers(data.Numbers));
+            WritePoints(xml, data.Formula is not null, "numCache", data.FormatCode ?? "General", data.Numbers.Count, Numbers(data.Numbers));
         }
         else if (numbers == false && data.Texts is not null)
         {
-            await WritePointsAsync(xml, data.Formula is not null, "strCache", null, data.Texts.Count, data.Texts);
+            WritePoints(xml, data.Formula is not null, "strCache", null, data.Texts.Count, data.Texts);
         }
         else if (data.Formula is null)
         {
             // A literal without values still says it has none.
-            await WriteValueAsync(xml, "ptCount", "0");
+            WriteValue(xml, "ptCount", "0");
         }
 
-        await xml.WriteEndElementAsync();
-        await xml.WriteEndElementAsync();
+        xml.WriteEndElement();
+        xml.WriteEndElement();
     }
 
     /// <summary>A cache (or, for a literal, the points alone): the format code of numbers, the count, and a c:pt per point that has a value.</summary>
-    private static async Task WritePointsAsync(XmlWriter xml, bool cache, string cacheName, string? formatCode, int count, IEnumerable<string?> points)
+    private static void WritePoints(XmlWriter xml, bool cache, string cacheName, string? formatCode, int count, IEnumerable<string?> points)
     {
         if (cache == true)
         {
-            await xml.WriteStartElementAsync("c", cacheName, ChartUri);
+            xml.WriteStartElement("c", cacheName, ChartUri);
         }
 
         if (formatCode is not null)
         {
-            await xml.WriteElementStringAsync("c", "formatCode", ChartUri, formatCode);
+            xml.WriteElementString("c", "formatCode", ChartUri, formatCode);
         }
 
-        await WriteValueAsync(xml, "ptCount", DrawingValues.Text(count));
+        WriteValue(xml, "ptCount", DrawingValues.Text(count));
         int index = 0;
 
         foreach (string? point in points)
         {
             if (point is not null)
             {
-                await xml.WriteStartElementAsync("c", "pt", ChartUri);
-                await xml.WriteAttributeStringAsync(null, "idx", null, DrawingValues.Text(index));
-                await xml.WriteElementStringAsync("c", "v", ChartUri, point);
-                await xml.WriteEndElementAsync();
+                xml.WriteStartElement("c", "pt", ChartUri);
+                xml.WriteAttributeString(null, "idx", null, DrawingValues.Text(index));
+                xml.WriteElementString("c", "v", ChartUri, point);
+                xml.WriteEndElement();
             }
 
             index++;
@@ -885,7 +884,7 @@ public static class ChartWriter
 
         if (cache == true)
         {
-            await xml.WriteEndElementAsync();
+            xml.WriteEndElement();
         }
     }
 
@@ -908,11 +907,11 @@ public static class ChartWriter
         return texts;
     }
 
-    private static async Task WriteValueAsync(XmlWriter xml, string name, string value)
+    private static void WriteValue(XmlWriter xml, string name, string value)
     {
-        await xml.WriteStartElementAsync("c", name, ChartUri);
-        await xml.WriteAttributeStringAsync(null, "val", null, value);
-        await xml.WriteEndElementAsync();
+        xml.WriteStartElement("c", name, ChartUri);
+        xml.WriteAttributeString(null, "val", null, value);
+        xml.WriteEndElement();
     }
 
     private static string Flag(bool value)

@@ -151,6 +151,12 @@ is read when the context is given the theme's colours (`DrawingReadContext.Schem
 `DrawingColors.TryRead` resolves any DrawingML colour with its modifiers (`lumMod`, `tint`, `shade` …).
 A package that has the part and its images in memory reads with `DrawingReader.Read`, without I/O.
 
+The writer is synchronous: `DrawingWriter.WriteShape`, `WritePicture`, `WriteGroup`,
+`WriteChartFrame`, `WriteFill`, `WriteOutline`, `WriteEffects`, `WriteRunProperties` and
+`ChartWriter.WriteChartSpace` write into any `XmlWriter`, also one without `Async` or one made
+with `XContainer.CreateWriter()` to edit a part in memory. The `…Async` forms do the same into
+the writer's buffer and return a completed task; the owner of the part flushes it.
+
 ## Lower level
 
 `OpcZip`, `OpcXml` and `OpcPath` are the helpers the two classes above use, for a package that

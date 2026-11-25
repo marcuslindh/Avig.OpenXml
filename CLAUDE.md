@@ -40,6 +40,11 @@ Från 0.2.0 finns också det som de tre delar:
   `DrawingReader.Read` läser utan I/O med en `DrawingReadContext` som har bilderna i minnet, och
   `Hyperlink.Read` och `DrawingBounds.Read` (negativa positioner) är publika för läsare.
 
+  Från 0.2.3 (för Avig.Bildspels skrivare): skrivaren är synkron (`DrawingWriter.WriteShape` …,
+  `ChartWriter.WriteChartSpace`) och skriver i vilken `XmlWriter` som helst, också en utan `Async`
+  eller en i ett `XElement`. `…Async`-formerna finns kvar, skriver samma XML i skrivarens buffert
+  och ger en färdig uppgift.
+
   En ändring i lagret ska klara `DrawingTests`/`ChartTests` (schemavalidering med
   DocumentFormat.OpenXml i både `xdr:` och `p:`, och rundtur: skriv, läs, skriv samma XML), och
   Kalkyls tester, ExcelCheck och samples (samma XML byte för byte), innan den släpps.
