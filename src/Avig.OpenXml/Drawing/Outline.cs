@@ -26,13 +26,22 @@ public enum LineDash
 
     /// <summary>Long dash, dot, dot.</summary>
     LongDashDotDot,
+
+    /// <summary>Dots as long as the line is wide, with gaps three times that (<c>dot</c>).</summary>
+    Dot,
+
+    /// <summary>Short dash, dot, at the line's width (<c>sysDashDot</c>).</summary>
+    SystemDashDot,
+
+    /// <summary>Short dash, dot, dot, at the line's width (<c>sysDashDotDot</c>).</summary>
+    SystemDashDotDot,
 }
 
 /// <summary>
 /// The line around a shape, the line of a line shape or a chart series, or a chart's border:
 /// a colour, a width and a dash pattern, or <see cref="None"/>.
 /// </summary>
-public sealed record Outline
+public sealed partial record Outline
 {
     private readonly double transparency;
 
@@ -73,7 +82,7 @@ public sealed record Outline
 /// A shadow behind a shape, a picture or a chart series (or inside a shape, as
 /// <see cref="Shape.InnerShadow"/>). The defaults are Office's "Offset: Bottom Right".
 /// </summary>
-public sealed record Shadow
+public sealed partial record Shadow
 {
     private readonly string color = "#000000";
     private readonly double transparency = 0.6;

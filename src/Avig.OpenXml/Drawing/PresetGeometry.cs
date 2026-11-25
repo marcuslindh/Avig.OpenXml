@@ -34,10 +34,20 @@ internal static class PresetGeometry
         "squareTabs", "plaqueTabs", "chartX", "chartStar", "chartPlus",
     };
 
+    /// <summary>The names in the schema's order.</summary>
+    public static IReadOnlyList<string> Names { get; } = [.. Known];
+
     /// <summary>True for a name in ST_ShapeType.</summary>
     public static bool IsKnown(string preset)
     {
         return Known.Contains(preset);
+    }
+
+    /// <summary>True for the presets Office draws as a connector (cxnSp): the line and the straight, elbow and curved connectors.</summary>
+    public static bool IsConnector(string preset)
+    {
+        return preset is "line" or "straightConnector1" or "bentConnector2" or "bentConnector3" or "bentConnector4" or "bentConnector5"
+            or "curvedConnector2" or "curvedConnector3" or "curvedConnector4" or "curvedConnector5";
     }
 
     /// <summary>The preset a kind is drawn with.</summary>
@@ -88,6 +98,26 @@ internal static class PresetGeometry
     /// <summary>The name Office gives a new shape of a kind, before its number: "Oval 3".</summary>
     public static string DefaultName(Shape shape)
     {
+        if (shape.Geometry is not null)
+        {
+            return "Freeform: Shape";
+        }
+
+        if (shape.Preset.StartsWith("bentConnector", StringComparison.Ordinal) == true)
+        {
+            return "Connector: Elbow";
+        }
+
+        if (shape.Preset.StartsWith("curvedConnector", StringComparison.Ordinal) == true)
+        {
+            return "Connector: Curved";
+        }
+
+        if (shape.Preset == "straightConnector1")
+        {
+            return "Straight Arrow Connector";
+        }
+
         return shape.Kind switch
         {
             ShapeKind.RoundedRectangle => "Rectangle: Rounded Corners",

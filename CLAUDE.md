@@ -45,6 +45,16 @@ Från 0.2.0 finns också det som de tre delar:
   eller en i ett `XElement`. `…Async`-formerna finns kvar, skriver samma XML i skrivarens buffert
   och ger en färdig uppgift.
 
+  Från 0.3.0 (för Avig.Bildspels milstolpe 6, formerna): egna geometrier (`CustomGeometry`,
+  `Shape.FromGeometry`), kopplingar som `p:cxnSp` med limmade ändar (`Shape.IsConnector`,
+  `ConnectionSite`), alla 187 förinställda former (`Shape.PresetNames`), övertoningar efter bana,
+  rutade bildfyllningar, gruppens och bakgrundens fyllning (`Fill.PathGradient`, `TiledPicture`,
+  `Group`, `Background`), linjer med sammansättning, ändar, hörn, egen streckning, pilspetsar och
+  övertoning (`Outline`), sken, reflektion, oskärpa, förinställd skugga, överlägg och perspektivskugga
+  (`GlowEffect`, `ReflectionEffect` …), 3D (`Scene3D`, `Shape3D`, `Bevel`, alla kameror, ljus och
+  material), temats formformat (`ShapeStyle`), låsningar, dold, dekorativ och titel. Det som läggs
+  till skrivs bara när det är satt, så att Kalkyls XML är densamma byte för byte.
+
   En ändring i lagret ska klara `DrawingTests`/`ChartTests` (schemavalidering med
   DocumentFormat.OpenXml i både `xdr:` och `p:`, och rundtur: skriv, läs, skriv samma XML), och
   Kalkyls tester, ExcelCheck och samples (samma XML byte för byte), innan den släpps.
