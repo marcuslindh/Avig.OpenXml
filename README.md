@@ -112,8 +112,16 @@ The namespace `Avig.OpenXml.Drawing` holds what Excel, PowerPoint and Word write
 - places and sizes in `Length` (`DrawingBounds`);
 - chart parts, `c:chartSpace` (`ChartSpace`, `ChartSpaceSeries`, `ChartData`, `ChartType`,
   `ChartAxis`, `DataLabels`, `MarkerStyle`, `LegendPosition`): column, bar, line, area, pie,
-  doughnut and scatter, stacked, combined and on a second axis, with the series' formulas and the
-  values last read from them.
+  doughnut, scatter, radar, bubble, stock, surface, pie of pie and bar of pie, stacked or stacked
+  to 100 % (`ChartGrouping`), in 3-D (`ChartView3D`, `BarShape` for cylinders, cones and
+  pyramids), combined and on a second axis, with trendlines, error bars, a data table and the
+  series' formulas and the values last read from them;
+- chart parts of the newer chart engine, `cx:chartSpace` (`ChartExSpace`, `ChartExSeries`,
+  `ChartExCategories`, `ChartExType`, `ChartExBinning`; `ChartExWriter`, `ChartExReader`):
+  waterfall, treemap, sunburst, histogram, Pareto, box and whisker, funnel and filled map;
+- the workbook a chart in a presentation or a document keeps its data in (`ChartWorkbook`): the
+  smallest .xlsx Excel opens, laid out from the chart's stored values, with the chart's formulas
+  bound to it, so that the application's Edit Data opens it.
 
 The layer does not know where it is. A spreadsheet drawing puts its shapes in `xdr:` elements
 inside cell anchors, a slide in `p:` elements in its `p:spTree`: the package that owns the part

@@ -299,12 +299,12 @@ public static class ChartExReader
                 Overflow = Number(Attr(binning, "overflow")),
             };
 
-            if (Number(Child(binning, "binSize")?.Value) is double width && width > 0)
+            if (Number(Value(binning, "binSize") ?? Child(binning, "binSize")?.Value) is double width && width > 0)
             {
                 read = read with { BinWidth = width };
             }
 
-            if (int.TryParse(Child(binning, "binCount")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out int count) == true)
+            if (int.TryParse(Value(binning, "binCount") ?? Child(binning, "binCount")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out int count) == true)
             {
                 read = read with { BinCount = Math.Clamp(count, 1, 1000) };
             }

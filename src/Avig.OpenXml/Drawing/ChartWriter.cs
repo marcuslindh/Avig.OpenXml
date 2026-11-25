@@ -388,8 +388,9 @@ public static partial class ChartWriter
                 break;
 
             default:
+                // Smooth when every series is: the application reads the chart's type from the style.
                 xml.WriteStartElement("c", "scatterChart", ChartUri);
-                WriteValue(xml, "scatterStyle", "lineMarker");
+                WriteValue(xml, "scatterStyle", Pick(group.Members.Count > 0 && group.Members.TrueForAll(member => member.Series.Smooth == true), "smoothMarker", "lineMarker"));
                 WriteValue(xml, "varyColors", varyColors);
                 WriteSeries(xml, chart, group);
                 WriteAxisIds(xml, group.Secondary);

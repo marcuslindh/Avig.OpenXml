@@ -45,6 +45,20 @@ Från 0.2.0 finns också det som de tre delar:
   eller en i ett `XElement`. `…Async`-formerna finns kvar, skriver samma XML i skrivarens buffert
   och ger en färdig uppgift.
 
+  Från 0.3.0 (för Avig.Bildspels diagram, milstolpe 6): alla diagramtyper PowerPoint 365 gör.
+  `ChartSpace` har fått `Grouping` (`ChartGrouping`, `Stacked` är samma inställning),
+  `ThreeD` (`ChartView3D`), `BarShape`, `RadarStyle`, `Wireframe`, `ScatterLines`, bubbel-,
+  börs- och cirkel-av-cirkel-inställningar, `SeriesAxis`, `DataTable`, `Style` och
+  `ExternalData` (relationen till arbetsboken); `ChartType` har fått `Radar`, `Bubble`,
+  `Stock`, `Surface`, `PieOfPie` och `BarOfPie`; serierna `BubbleSizes`, `Explosion`,
+  `Trendlines` och `ErrorBars`; axlarna `MinorGridlines`, `Reversed`, `LogBase`, `MinorUnit`.
+  Den nya diagrammotorn (`cx:`) är `ChartExSpace` med `ChartExWriter`/`ChartExReader`, och
+  `ChartWorkbook` gör den minsta .xlsx ett diagram behåller sina värden i. Det som fanns skrivs
+  som förut, utom att ett punktdiagram där alla serier är utjämnade får
+  `scatterStyle="smoothMarker"` (annars läser PowerPoint och Excel typen som raka linjer).
+  `cx:axisId`, `cx:binSize` och `cx:binCount` skrivs med `val`-attribut, som PowerPoint 365
+  kräver; Open XML SDK:s schema har texten som innehåll, så de fynden filtreras i testerna.
+
   En ändring i lagret ska klara `DrawingTests`/`ChartTests` (schemavalidering med
   DocumentFormat.OpenXml i både `xdr:` och `p:`, och rundtur: skriv, läs, skriv samma XML), och
   Kalkyls tester, ExcelCheck och samples (samma XML byte för byte), innan den släpps.

@@ -5,7 +5,9 @@ namespace Avig.OpenXml.Drawing;
 /// <summary>
 /// Writes a chart part of the newer chart engine (cx:chartSpace), in the order the schema
 /// ([MS-ODRAWXML] 2.24) gives and as PowerPoint 365 writes it: the data first (cx:chartData,
-/// one cx:data per series with the categories and the values), then the chart.
+/// one cx:data per series with the categories and the values), then the chart. cx:axisId,
+/// cx:binSize and cx:binCount carry their value in a val attribute, as PowerPoint 365 reads them
+/// (it does not open a part with the value as text, which is what the Open XML SDK's schema says).
 /// </summary>
 public static class ChartExWriter
 {
@@ -80,7 +82,7 @@ public static class ChartExWriter
             xml.WriteAttributeString(null, "layoutId", null, "paretoLine");
             xml.WriteAttributeString(null, "ownerIdx", null, "0");
             xml.WriteAttributeString(null, "uniqueId", null, UniqueId(255));
-            xml.WriteElementString("cx", "axisId", Namespace, "2");
+            Value(xml, "axisId", "2");
             xml.WriteEndElement();
         }
 
@@ -243,7 +245,7 @@ public static class ChartExWriter
 
         if (chart.Type == ChartExType.Pareto)
         {
-            xml.WriteElementString("cx", "axisId", Namespace, "1");
+            Value(xml, "axisId", "1");
         }
 
         xml.WriteEndElement();
@@ -342,11 +344,11 @@ public static class ChartExWriter
 
         if (binning.BinWidth is double width)
         {
-            xml.WriteElementString("cx", "binSize", Namespace, DrawingValues.Text(width));
+            Value(xml, "binSize", DrawingValues.Text(width));
         }
         else if (binning.BinCount is int count)
         {
-            xml.WriteElementString("cx", "binCount", Namespace, DrawingValues.Text(count));
+            Value(xml, "binCount", DrawingValues.Text(count));
         }
 
         xml.WriteEndElement();

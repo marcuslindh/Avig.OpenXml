@@ -89,7 +89,7 @@ public class ChartExTests
                 <cx:numDim type="val"><cx:lvl ptCount="2"><cx:pt idx="0">NaN</cx:pt><cx:pt idx="1">4</cx:pt></cx:lvl></cx:numDim>
               </cx:data></cx:chartData>
               <cx:chart><cx:plotArea><cx:plotAreaRegion>
-                <cx:series layoutId="clusteredColumn"><cx:dataId val="0"/><cx:layoutPr><cx:binning><cx:binCount>99999</cx:binCount><cx:binSize>-2</cx:binSize></cx:binning></cx:layoutPr></cx:series>
+                <cx:series layoutId="clusteredColumn"><cx:dataId val="0"/><cx:layoutPr><cx:binning><cx:binCount val="99999"/><cx:binSize val="-2"/></cx:binning></cx:layoutPr></cx:series>
               </cx:plotAreaRegion></cx:plotArea></cx:chart>
             </cx:chartSpace>
             """);
@@ -229,7 +229,19 @@ public class ChartExTests
     {
         OpenXmlValidator validator = new(DocumentFormat.OpenXml.FileFormatVersions.Microsoft365);
 
-        return [.. validator.Validate(new DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing.ChartSpace(xml)).Select(error => $"{error.Path?.XPath}: {error.Description}")];
+        // PowerPoint 365 opens cx:axisId, cx:binSize and cx:binCount only with the value in a val
+        // attribute; the SDK's schema has it as text, so those two findings are not held against the part.
+        return [.. validator.Validate(new DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing.ChartSpace(xml))
+            .Select(error => $"{error.Path?.XPath}: {error.Description}")
+            .Where(problem => IsValueAttributeFinding(problem) == false)];
+    }
+
+    /// <summary>The validator's findings about the val attribute PowerPoint needs on cx:axisId, cx:binSize and cx:binCount.</summary>
+    internal static bool IsValueAttributeFinding(string problem)
+    {
+        bool element = problem.Contains("cx:axisId", StringComparison.Ordinal) || problem.Contains("cx:binSize", StringComparison.Ordinal) || problem.Contains("cx:binCount", StringComparison.Ordinal);
+
+        return element == true && (problem.Contains("The 'val' attribute is not declared", StringComparison.Ordinal) || problem.Contains("The text value cannot be empty", StringComparison.Ordinal));
     }
 
     private static List<string> ValidateWorkbook(byte[] bytes)
