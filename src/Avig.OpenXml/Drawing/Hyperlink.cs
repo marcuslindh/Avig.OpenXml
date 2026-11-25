@@ -73,6 +73,15 @@ public sealed record Hyperlink
         }
     }
 
+    /// <summary>The shape or text is drawn as clicked when the link is clicked (a:hlinkClick highlightClick), as PowerPoint's Action Settings, Highlight click.</summary>
+    public bool HighlightClick { get; init; }
+
+    /// <summary>The sound played when the link is clicked (a:snd), or null. The program that writes the drawing stores the sound as a part of its own.</summary>
+    public HyperlinkSound? Sound { get; init; }
+
+    /// <summary>A click stops the sound that is playing (a:hlinkClick endSnd).</summary>
+    public bool StopsSound { get; init; }
+
     /// <summary>A link to a web page or a mail address.</summary>
     /// <param name="url">An absolute address: <c>https://</c>, <c>http://</c> or <c>mailto:</c>.</param>
     /// <returns>The link.</returns>

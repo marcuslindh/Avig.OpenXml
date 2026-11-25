@@ -158,7 +158,7 @@ public class DrawingTests
         Hyperlink web = Hyperlink.ToUrl("https://example.com/report") with { Tooltip = "Open the report" };
 
         Hyperlink inside = Hyperlink.ToLocation("'Sales 2026'!A1");
-        Hyperlink jump = Hyperlink.ToLocation("slide3.xml") with { Action = "ppaction://hlinksldjump" };
+        Hyperlink jump = Hyperlink.ToLocation("slide3.xml") with { Action = "ppaction://hlinksldjump", HighlightClick = true, StopsSound = true };
 
         (string xml, DrawingContext context) = await DrawingKit.WriteAsync(
             Host(host),

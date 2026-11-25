@@ -1106,6 +1106,15 @@ public static partial class DrawingReader
                 link = link with { Action = Clean(action) };
             }
 
+            if (link is not null)
+            {
+                link = link with
+                {
+                    HighlightClick = DrawingValues.Boolean(click.Attribute("highlightClick")?.Value, false),
+                    StopsSound = DrawingValues.Boolean(click.Attribute("endSnd")?.Value, false),
+                };
+            }
+
             return link;
         }
 

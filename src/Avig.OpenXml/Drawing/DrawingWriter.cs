@@ -726,6 +726,16 @@ public static partial class DrawingWriter
                 xml.WriteAttributeString(null, "action", null, link.Action);
             }
 
+            if (link.StopsSound == true)
+            {
+                xml.WriteAttributeString(null, "endSnd", null, "1");
+            }
+
+            if (link.HighlightClick == true)
+            {
+                xml.WriteAttributeString(null, "highlightClick", null, "1");
+            }
+
             xml.WriteEndElement();
         }
 
