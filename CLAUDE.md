@@ -35,6 +35,11 @@ Från 0.2.0 finns också det som de tre delar:
   bilderna. Diagrammens formler (`ChartData.Formula`) skrivs och läses som de är; vad de pekar på
   bestämmer värden (Kalkyls `Chart`/`ChartSeries` gör om cellområden till formler).
 
+  Från 0.2.1 (för Avig.Bildspels läsare): `DrawingColors` löser temafärger och färgmodifierare,
+  `DrawingReadContext.SchemeColors` låter läsaren använda dem (null, som förut, lämnar dem utanför),
+  `DrawingReader.Read` läser utan I/O med en `DrawingReadContext` som har bilderna i minnet, och
+  `Hyperlink.Read` och `DrawingBounds.Read` (negativa positioner) är publika för läsare.
+
   En ändring i lagret ska klara `DrawingTests`/`ChartTests` (schemavalidering med
   DocumentFormat.OpenXml i både `xdr:` och `p:`, och rundtur: skriv, läs, skriv samma XML), och
   Kalkyls tester, ExcelCheck och samples (samma XML byte för byte), innan den släpps.

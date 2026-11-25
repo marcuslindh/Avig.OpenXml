@@ -146,7 +146,10 @@ same types, whatever its namespace, with a `DrawingReadContext` that gives it th
 relationships and a way to read an image; `ChartReader.Read` does the same for a chart part.
 What is written and read back writes the same XML again. Everything is read by local name, so
 Strict OOXML works, and values from a file outside what the types take are clamped, not thrown.
-What the types cannot hold, such as a theme colour or a custom geometry, is left out.
+What the types cannot hold, such as a custom geometry, is left out. A theme colour (`a:schemeClr`)
+is read when the context is given the theme's colours (`DrawingReadContext.SchemeColors`);
+`DrawingColors.TryRead` resolves any DrawingML colour with its modifiers (`lumMod`, `tint`, `shade` …).
+A package that has the part and its images in memory reads with `DrawingReader.Read`, without I/O.
 
 ## Lower level
 
