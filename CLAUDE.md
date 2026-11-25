@@ -7,9 +7,37 @@ till Avig.Ord-projektet, eftersom det bröts ut ur Avig.Kalkyl för Avig.Ords sk
 
 ## Vad det här är
 
-NuGet-paketet Avig.OpenXml: paketlagret (OPC) under Avig.Kalkyl och Avig.Ord. Läser och skriver
-zip-paket och Flat OPC: delar, content types och relationer, med gränser mot fientliga filer.
-Det vet inget om kalkylblad eller dokument.
+NuGet-paketet Avig.OpenXml: paketlagret (OPC) under Avig.Kalkyl, Avig.Ord och Avig.Bildspel. Läser
+och skriver zip-paket och Flat OPC: delar, content types och relationer, med gränser mot
+fientliga filer. Det vet inget om kalkylblad, dokument eller presentationer.
+
+Från 0.2.0 finns också det som de tre delar:
+
+- **`Length`** (namnrymden `Avig.OpenXml`): mått lagrade som EMU, flyttad hit från Avig.Ord.
+- **Namnrymder och content types** i `OpcNamespaces`, också DrawingML (a:, c:, asvg:) och
+  PresentationML (presentation, bilder, layouter, mallar, anteckningar, båda sorternas
+  kommentarer, presProps, viewProps, tableStyles och .pptm, .potx, .potm, .ppsx, .ppsm).
+- **DrawingML-lagret** (namnrymden `Avig.OpenXml.Drawing`), flyttat hit från Avig.Kalkyl (beslut
+  i Knowledge: "Avig.Bildspel — Beslut: DrawingML och Length flyttas till Avig.OpenXml"):
+  former och förinställd geometri (`Shape`, `ShapeKind`, `Shape.FromPreset`, `ShapeAdjustment`),
+  fyllningar (`Fill`: färg, gradient, mönster, bild), linjer (`Outline`), skuggor och mjuka kanter
+  (`Shadow`), text i former (`ShapeText`, `TextRun`, `TextFont`, `TextAlignment`, `TextAnchor`),
+  grupper (`ShapeGroup`, `GroupItem`, också nästlade), bilder (`Picture`, PNG/JPEG/GIF och SVG med
+  rasterbild som reserv, storleken ur filhuvudet), länkar (`Hyperlink`), platser i `Length`
+  (`DrawingBounds`) och diagramdelen (`ChartSpace`, `ChartSpaceSeries`, `ChartData`,
+  `ChartAxis`, `DataLabels` …). `DrawingWriter` och `ChartWriter` skriver, `DrawingReader` och
+  `ChartReader` läser tillbaka (på lokalt namn, värden utanför typernas gränser klämms).
+
+  **Lagret vet inte var det ligger.** Formträdets namnrymd (`xdr:` i ett blad, `p:` på en bild) och
+  dess två skillnader (Excels tomma `macro`, bildens `nvPr`) ges av värden i `ShapeTreeNamespace`.
+  Ankare, `p:spTree`, delarna och relationerna skriver värden; `DrawingContext` samlar id:n och
+  vad relationerna ska peka på (`Targets`), och `DrawingReadContext` ger läsaren relationerna och
+  bilderna. Diagrammens formler (`ChartData.Formula`) skrivs och läses som de är; vad de pekar på
+  bestämmer värden (Kalkyls `Chart`/`ChartSeries` gör om cellområden till formler).
+
+  En ändring i lagret ska klara `DrawingTests`/`ChartTests` (schemavalidering med
+  DocumentFormat.OpenXml i både `xdr:` och `p:`, och rundtur: skriv, läs, skriv samma XML), och
+  Kalkyls tester, ExcelCheck och samples (samma XML byte för byte), innan den släpps.
 
 ## Kommandon
 
@@ -21,7 +49,9 @@ dotnet test Avig.OpenXml.slnx
 
 ## Regler
 
-- **Inga beroenden utom Avig.Result.** `publish.ps1` failar annars.
+- **Inga beroenden utom Avig.Result.** `publish.ps1` failar annars. Testerna får använda
+  DocumentFormat.OpenXml, för schemavalideringen av DrawingML och för att jämföra PresentationML-
+  namnen med Open XML SDK:s.
 - **Ändra inget utan att köra Avig.Kalkyls och Avig.Ords tester mot det nya paketet.** Båda
   paketens felkoder läser av meddelandena härifrån: `OpcErrors.DamagedPrefix` ("The file is
   damaged") och `OpcErrors.LimitMarker` ("the limit set in "). De får inte ändras.

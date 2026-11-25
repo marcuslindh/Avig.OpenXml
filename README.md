@@ -1,13 +1,17 @@
 # Avig.OpenXml
 
-The package layer under [Avig.Kalkyl](https://github.com/marcuslindh/Avig.Kalkyl) (Excel) and
-Avig.Ord (Word). It reads and writes Open Packaging Conventions files — the zip container that
-.xlsx, .docx and .pptx files are — and Flat OPC, the same package as one XML file.
+The package layer under [Avig.Kalkyl](https://github.com/marcuslindh/Avig.Kalkyl) (Excel), Avig.Ord
+(Word) and Avig.Bildspel (PowerPoint). It reads and writes Open Packaging Conventions files — the
+zip container that .xlsx, .docx and .pptx files are — and Flat OPC, the same package as one XML
+file.
 
 It is **not** related to Microsoft's `DocumentFormat.OpenXml` (the Open XML SDK). That package
 gives you every element of every Office schema as a class. This one knows nothing about
-spreadsheets or documents: it gives you parts, content types and relationships, and makes sure a
-file from outside cannot run your process out of memory while you read them.
+spreadsheets, documents or presentations: it gives you parts, content types and relationships,
+and makes sure a file from outside cannot run your process out of memory while you read them. On
+top of that it has what the three packages share: `Length`, the PresentationML and DrawingML
+names in `OpcNamespaces`, and DrawingML itself, the shapes, pictures and charts that Office
+writes the same way everywhere.
 
 - No dependencies besides Avig.Result; trimming and Native AOT safe.
 - Failures you should expect come back as `Result`, not exceptions.
@@ -84,6 +88,65 @@ await writer.CompleteAsync();
 
 The .rels parts and `[Content_Types].xml` are written by `CompleteAsync`. Pass
 `OpcPackageKind.FlatOpc` to `CreateAsync` to write one XML file instead of a zip.
+
+## Lengths
+
+`Length` holds a length exactly, as EMUs (914 400 to the inch), whatever unit it came in:
+`Length.Cm(2.5)`, `Length.Pt(11)`, `Length.Inch(1)`, `Length.Px(96)`, `Length.FromEmu(...)`, and
+Word's twips and half-points (`FromTwips`, `ToHalfPoints`). Avig.Ord, Avig.Kalkyl and
+Avig.Bildspel all use it.
+
+## DrawingML: shapes, pictures and charts
+
+The namespace `Avig.OpenXml.Drawing` holds what Excel, PowerPoint and Word write the same way:
+
+- shapes with a preset geometry (`Shape`, `ShapeKind`, or any of the 187 presets with
+  `Shape.FromPreset("star5")` and `Adjustments`);
+- fills (`Fill.Solid`, `Fill.Gradient`, `Fill.Pattern`, `Fill.Picture`, `Fill.None`), lines
+  (`Outline`, `LineDash`), shadows and soft edges (`Shadow`);
+- text in shapes: paragraphs and runs with their own font (`ShapeText`, `TextRun`, `TextFont`,
+  `TextAlignment`, `TextAnchor`, margins and wrapping);
+- groups, also inside groups (`ShapeGroup`, `GroupItem`), pictures (`Picture`: PNG, JPEG and GIF,
+  with the size read from the file's header, and SVG with a PNG for older versions), and a link on
+  a shape, a group or a picture (`Hyperlink`);
+- places and sizes in `Length` (`DrawingBounds`);
+- chart parts, `c:chartSpace` (`ChartSpace`, `ChartSpaceSeries`, `ChartData`, `ChartType`,
+  `ChartAxis`, `DataLabels`, `MarkerStyle`, `LegendPosition`): column, bar, line, area, pie,
+  doughnut and scatter, stacked, combined and on a second axis, with the series' formulas and the
+  values last read from them.
+
+The layer does not know where it is. A spreadsheet drawing puts its shapes in `xdr:` elements
+inside cell anchors, a slide in `p:` elements in its `p:spTree`: the package that owns the part
+says which with a `ShapeTreeNamespace`, writes what goes around the shapes, and writes the
+relationships the shapes need, which a `DrawingContext` collects while they are written.
+
+```csharp
+ShapeTreeNamespace slide = new("p", OpcNamespaces.PresentationMain) { ApplicationProperties = true };
+DrawingContext context = new(slide, usedRelationshipIds, firstShapeId: 2);
+
+Shape card = new(ShapeKind.RoundedRectangle)
+{
+    Fill = Fill.Gradient("#2384F9", "#605776", 45),
+    Outline = Outline.None,
+    Shadow = new Shadow(),
+    Text = new ShapeText("Projects", new TextFont { Size = 14, Bold = true, Color = "#FFFFFF" }),
+    Link = Hyperlink.ToUrl("https://example.com/projects"),
+};
+
+await DrawingWriter.WriteShapeAsync(xml, card, context, new DrawingBounds(Length.Cm(2), Length.Cm(2), Length.Cm(6), Length.Cm(3)));
+
+foreach (DrawingTarget target in context.Targets)
+{
+    // An image, a link or a chart: the owner writes the part or the relationship with target.Id.
+}
+```
+
+`DrawingReader.ReadAsync` reads an `sp`, `cxnSp`, `pic`, `grpSp` or `graphicFrame` back into the
+same types, whatever its namespace, with a `DrawingReadContext` that gives it the part's
+relationships and a way to read an image; `ChartReader.Read` does the same for a chart part.
+What is written and read back writes the same XML again. Everything is read by local name, so
+Strict OOXML works, and values from a file outside what the types take are clamped, not thrown.
+What the types cannot hold, such as a theme colour or a custom geometry, is left out.
 
 ## Lower level
 

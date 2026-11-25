@@ -53,4 +53,131 @@ public static class OpcNamespaces
 
     /// <summary>The content type of an embedded OLE object (oleObject1.bin), which can hold a program or a package of files.</summary>
     public const string OleObjectContentType = "application/vnd.openxmlformats-officedocument.oleObject";
+
+    // --- DrawingML, shared by Word, Excel and PowerPoint ---
+
+    /// <summary>The namespace of DrawingML's shapes, fills, lines, effects and text (a:).</summary>
+    public const string DrawingMain = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+    /// <summary>The namespace of a chart part (c:chartSpace).</summary>
+    public const string DrawingChart = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
+    /// <summary>The namespace of the SVG extension of a:blip (asvg:svgBlip), from Office 2016.</summary>
+    public const string DrawingSvg = "http://schemas.microsoft.com/office/drawing/2016/SVG/main";
+
+    /// <summary>The relationship from a drawing, a slide or a graphic frame to a chart part.</summary>
+    public const string ChartRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+
+    /// <summary>The content type of a chart part.</summary>
+    public const string ChartContentType = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
+
+    /// <summary>The relationship to a theme part.</summary>
+    public const string ThemeRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
+
+    /// <summary>The content type of a theme part (theme1.xml), in Word, Excel and PowerPoint.</summary>
+    public const string ThemeContentType = "application/vnd.openxmlformats-officedocument.theme+xml";
+
+    // --- PresentationML ---
+
+    /// <summary>The namespace of PresentationML (p:): the presentation, slides, layouts, masters and notes.</summary>
+    public const string PresentationMain = "http://schemas.openxmlformats.org/presentationml/2006/main";
+
+    /// <summary>The namespace of PowerPoint's modern (threaded) comments and their authors, from Microsoft 365 (p188:).</summary>
+    public const string PresentationModernComments = "http://schemas.microsoft.com/office/powerpoint/2018/8/main";
+
+    /// <summary>The content type of presentation.xml in a .pptx.</summary>
+    public const string PresentationContentType = "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml";
+
+    /// <summary>The content type of presentation.xml in a .pptm, a presentation with macros.</summary>
+    public const string PresentationMacroEnabledContentType = "application/vnd.ms-powerpoint.presentation.macroEnabled.main+xml";
+
+    /// <summary>The content type of presentation.xml in a .potx, a template.</summary>
+    public const string PresentationTemplateContentType = "application/vnd.openxmlformats-officedocument.presentationml.template.main+xml";
+
+    /// <summary>The content type of presentation.xml in a .potm, a template with macros.</summary>
+    public const string PresentationTemplateMacroEnabledContentType = "application/vnd.ms-powerpoint.template.macroEnabled.main+xml";
+
+    /// <summary>The content type of presentation.xml in a .ppsx, a show that opens in slide show view.</summary>
+    public const string PresentationSlideShowContentType = "application/vnd.openxmlformats-officedocument.presentationml.slideshow.main+xml";
+
+    /// <summary>The content type of presentation.xml in a .ppsm, a show with macros.</summary>
+    public const string PresentationSlideShowMacroEnabledContentType = "application/vnd.ms-powerpoint.slideshow.macroEnabled.main+xml";
+
+    /// <summary>The content type of a slide.</summary>
+    public const string SlideContentType = "application/vnd.openxmlformats-officedocument.presentationml.slide+xml";
+
+    /// <summary>The content type of a slide layout.</summary>
+    public const string SlideLayoutContentType = "application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml";
+
+    /// <summary>The content type of a slide master.</summary>
+    public const string SlideMasterContentType = "application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml";
+
+    /// <summary>The content type of a slide's speaker notes.</summary>
+    public const string NotesSlideContentType = "application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml";
+
+    /// <summary>The content type of the notes master.</summary>
+    public const string NotesMasterContentType = "application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml";
+
+    /// <summary>The content type of the handout master.</summary>
+    public const string HandoutMasterContentType = "application/vnd.openxmlformats-officedocument.presentationml.handoutMaster+xml";
+
+    /// <summary>The content type of a slide's classic comments (comment1.xml).</summary>
+    public const string CommentsContentType = "application/vnd.openxmlformats-officedocument.presentationml.comments+xml";
+
+    /// <summary>The content type of the authors of classic comments (commentAuthors.xml).</summary>
+    public const string CommentAuthorsContentType = "application/vnd.openxmlformats-officedocument.presentationml.commentAuthors+xml";
+
+    /// <summary>The content type of a slide's modern comments (modernComment_*.xml).</summary>
+    public const string ModernCommentsContentType = "application/vnd.ms-powerpoint.comments+xml";
+
+    /// <summary>The content type of the authors of modern comments (authors.xml).</summary>
+    public const string ModernCommentAuthorsContentType = "application/vnd.ms-powerpoint.authors+xml";
+
+    /// <summary>The content type of presProps.xml: the presentation's show settings.</summary>
+    public const string PresentationPropertiesContentType = "application/vnd.openxmlformats-officedocument.presentationml.presProps+xml";
+
+    /// <summary>The content type of viewProps.xml: how PowerPoint last showed the presentation.</summary>
+    public const string ViewPropertiesContentType = "application/vnd.openxmlformats-officedocument.presentationml.viewProps+xml";
+
+    /// <summary>The content type of tableStyles.xml.</summary>
+    public const string TableStylesContentType = "application/vnd.openxmlformats-officedocument.presentationml.tableStyles+xml";
+
+    /// <summary>The relationship from presentation.xml to a slide.</summary>
+    public const string SlideRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
+
+    /// <summary>The relationship from a slide to its layout.</summary>
+    public const string SlideLayoutRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout";
+
+    /// <summary>The relationship from presentation.xml or a layout to a slide master.</summary>
+    public const string SlideMasterRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster";
+
+    /// <summary>The relationship from a slide to its speaker notes.</summary>
+    public const string NotesSlideRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
+
+    /// <summary>The relationship from presentation.xml or a notes slide to the notes master.</summary>
+    public const string NotesMasterRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster";
+
+    /// <summary>The relationship from presentation.xml to the handout master.</summary>
+    public const string HandoutMasterRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/handoutMaster";
+
+    /// <summary>The relationship from a slide to its classic comments.</summary>
+    public const string CommentsRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
+
+    /// <summary>The relationship from presentation.xml to the authors of classic comments.</summary>
+    public const string CommentAuthorsRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentAuthors";
+
+    /// <summary>The relationship from a slide to its modern comments.</summary>
+    public const string ModernCommentsRelationship = "http://schemas.microsoft.com/office/2018/10/relationships/comments";
+
+    /// <summary>The relationship from presentation.xml to the authors of modern comments.</summary>
+    public const string ModernCommentAuthorsRelationship = "http://schemas.microsoft.com/office/2018/10/relationships/authors";
+
+    /// <summary>The relationship from presentation.xml to presProps.xml.</summary>
+    public const string PresentationPropertiesRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/presProps";
+
+    /// <summary>The relationship from presentation.xml to viewProps.xml.</summary>
+    public const string ViewPropertiesRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/viewProps";
+
+    /// <summary>The relationship from presentation.xml to tableStyles.xml.</summary>
+    public const string TableStylesRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles";
 }
