@@ -93,8 +93,9 @@ The .rels parts and `[Content_Types].xml` are written by `CompleteAsync`. Pass
 
 `Length` holds a length exactly, as EMUs (914 400 to the inch), whatever unit it came in:
 `Length.Cm(2.5)`, `Length.Pt(11)`, `Length.Inch(1)`, `Length.Px(96)`, `Length.FromEmu(...)`, and
-Word's twips and half-points (`FromTwips`, `ToHalfPoints`). Avig.Ord, Avig.Kalkyl and
-Avig.Bildspel all use it.
+Word's twips and half-points (`FromTwips`, `ToHalfPoints`). A value past what a length holds
+saturates (the longest length of its sign, never one of the other sign), in every unit. Avig.Ord,
+Avig.Kalkyl and Avig.Bildspel all use it.
 
 ## DrawingML: shapes, pictures and charts
 

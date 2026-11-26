@@ -73,6 +73,10 @@ Från 0.2.0 finns också det som de tre delar:
   `StopsSound` och `Sound` (`HyperlinkSound`): `highlightClick` och `endSnd` skrivs och läses på
   `a:hlinkClick`; ljudet (`a:snd`) lagrar och skriver ägaren. Inget skrivs när de inte är satta.
 
+  Från 0.3.2: `Length.FromTwips` och `FromHalfPoints` mättas i stället för att slå runt till fel
+  tecken (förut gav 4,8e18 twips en negativ längd), som `Pt`, `Cm` och de andra redan gör genom
+  .NET:s mättande omvandling från double. Vanliga värden blir som förut.
+
   En ändring i lagret ska klara `DrawingTests`/`ChartTests` (schemavalidering med
   DocumentFormat.OpenXml i både `xdr:` och `p:`, och rundtur: skriv, läs, skriv samma XML), och
   Kalkyls tester, ExcelCheck och samples (samma XML byte för byte), innan den släpps.

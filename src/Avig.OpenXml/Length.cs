@@ -164,16 +164,29 @@ public readonly record struct Length : IComparable<Length>
         return ToPt().ToString("0.##", CultureInfo.InvariantCulture) + "pt";
     }
 
-    /// <summary>A length from twentieths of a point, Word's unit for margins, indents and spacing.</summary>
+    /// <summary>
+    /// A length from twentieths of a point, Word's unit for margins, indents and spacing. Past what
+    /// a length holds (about 1.45e16 twips) it saturates, as <see cref="Pt"/> and the other
+    /// factories do: the longest length of the same sign, never one of the other sign.
+    /// </summary>
     public static Length FromTwips(long twips)
     {
-        return new Length(twips * EmuPerTwip);
+        return new Length(Saturating(twips, EmuPerTwip));
     }
 
-    /// <summary>A length from half-points, Word's unit for font sizes.</summary>
+    /// <summary>
+    /// A length from half-points, Word's unit for font sizes. Past what a length holds (about
+    /// 1.45e15 half-points) it saturates, as <see cref="Pt"/> and the other factories do.
+    /// </summary>
     public static Length FromHalfPoints(long halfPoints)
     {
-        return new Length(halfPoints * EmuPerPoint / 2);
+        return new Length(Saturating(halfPoints, EmuPerPoint / 2));
+    }
+
+    /// <summary>value × factor, clamped to the range of a long instead of wrapping around.</summary>
+    private static long Saturating(long value, long factor)
+    {
+        return long.CreateSaturating((Int128)value * factor);
     }
 
     /// <summary>The length in whole twips, rounded.</summary>

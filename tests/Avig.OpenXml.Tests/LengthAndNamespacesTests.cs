@@ -24,6 +24,30 @@ public class LengthAndNamespacesTests
     }
 
     [Fact]
+    public void Twips_and_half_points_past_what_a_length_holds_saturate_as_points_do()
+    {
+        // Before 0.3.2: 4.8e18 twips wrapped around to a negative length.
+        Assert.Equal(long.MaxValue, Length.FromTwips(4_800_000_000_000_000_000).Emu);
+        Assert.Equal(long.MaxValue, Length.FromTwips(long.MaxValue).Emu);
+        Assert.Equal(long.MinValue, Length.FromTwips(long.MinValue).Emu);
+        Assert.Equal(long.MaxValue, Length.FromTwips((long.MaxValue / 635) + 1).Emu);
+        Assert.Equal((long.MaxValue / 635) * 635, Length.FromTwips(long.MaxValue / 635).Emu);
+        Assert.Equal(long.MaxValue, Length.FromHalfPoints(long.MaxValue / 20).Emu);
+        Assert.Equal(long.MinValue, Length.FromHalfPoints(long.MinValue).Emu);
+        Assert.Equal((long.MaxValue / 6_350) * 6_350, Length.FromHalfPoints(long.MaxValue / 6_350).Emu);
+        Assert.Equal(long.MaxValue, Length.Pt(1e300).Emu);
+        Assert.Equal(long.MinValue, Length.Pt(-1e300).Emu);
+
+        // Every value Word writes is as before.
+        Assert.Equal(-635, Length.FromTwips(-1).Emu);
+        Assert.Equal(1_440 * 635, Length.FromTwips(1_440).Emu);
+        Assert.Equal(6_350, Length.FromHalfPoints(1).Emu);
+        Assert.Equal(-6_350 * 3, Length.FromHalfPoints(-3).Emu);
+        Assert.Equal(Length.Pt(1_638), Length.FromHalfPoints(3_276));
+        Assert.Equal(Length.Inch(22), Length.FromTwips(31_680));
+    }
+
+    [Fact]
     public void The_presentation_content_types_and_relationships_are_the_sdks()
     {
         using MemoryStream stream = new();
