@@ -69,6 +69,10 @@ Från 0.2.0 finns också det som de tre delar:
   `cx:axisId`, `cx:binSize` och `cx:binCount` skrivs med `val`-attribut, som PowerPoint 365
   kräver; Open XML SDK:s schema har texten som innehåll, så de fynden filtreras i testerna.
 
+  Från 0.3.1 (för Avig.Bildspels milstolpe 6, länkarnas ljud): `Hyperlink.HighlightClick`,
+  `StopsSound` och `Sound` (`HyperlinkSound`): `highlightClick` och `endSnd` skrivs och läses på
+  `a:hlinkClick`; ljudet (`a:snd`) lagrar och skriver ägaren. Inget skrivs när de inte är satta.
+
   En ändring i lagret ska klara `DrawingTests`/`ChartTests` (schemavalidering med
   DocumentFormat.OpenXml i både `xdr:` och `p:`, och rundtur: skriv, läs, skriv samma XML), och
   Kalkyls tester, ExcelCheck och samples (samma XML byte för byte), innan den släpps.
